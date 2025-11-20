@@ -1,152 +1,115 @@
-// Actual file
-/* What this module does:
-    - Other modules will make their own instance of this module for sending and receiving data
-    - inputs: used for sending data
-    - outputs: used for receiving data  
-*/
-
-
-module data_bus_device(
+module data_bus(
     input  wire        clk,
-    input  wire        rst_n,
+    input  wire        rst_n,      // active low
 
     // Sending
-    input  wire        send_valid, 
-    input  wire [7:0]  send_data,
-    output reg         send_ready,
+    input  wire        send_valid,  // data (to send) is valid 
+    input  wire [7:0]  send_data,   // data (to send)
+    output reg         send_ready,  // sender can send
+    input  wire        ack,         // marks last packet to send
 
     // Receiving
-    output reg         recv_valid,
-    output reg  [7:0]  recv_data,
+    input  wire [1:0]  source_id,  // this module's ID
+    output reg         recv_valid, // valid data for this module
+    output reg [7:0]   recv_data,  // data being received
 
-    // Arbitration control
-    input  wire        bus_grant, // given by arbiter (good to check)
+    // Arbitration 
+    input  wire        bus_grant,  // bus grant from arbiter
 
     // Shared bus
-    inout  wire [7:0]  bus_data,
-    inout  wire        bus_valid
+    inout  wire [7:0]  bus_data,        
+    inout  wire        bus_valid,
+    output reg         bus_ready
 );
 
+    // --- Internal state ---
     reg driving;
+    reg transaction_active;
 
-    // Tri-state driver
-    assign bus_data  = (driving && bus_grant) ? send_data : 8'bz;
-    assign bus_valid = (driving && bus_grant) ? 1'b1      : 1'bz;
+    // Separate flags for send/receive
+    reg first_pkt_received;
 
-    // Driving logic
+    // Grab and store source/destination from first packet
+    reg [1:0] allowed_source; 
+    reg [1:0] allowed_dest;   
+
+    // --- Tri-state bus drivers ---
+    assign bus_data  = (driving && transaction_active) ? send_data : 8'bz;
+    assign bus_valid = (driving && transaction_active) ? 1'b1 : 1'bz;
+
+    // --- Sending logic ---
     always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) begin
-            driving   <= 0; 
-            send_ready <= 0;
-        end else if(bus_grant && send_valid) begin
-            driving   <= 1;
-            send_ready <= 1;
+        if (!rst_n) begin
+            driving             <= 0;
+            transaction_active  <= 0;
+            send_ready          <= 0;
+
         end else begin
-            driving   <= 0;
-            send_ready <= 0;
+            // Reset transaction if bus grant lost
+            if (!bus_grant) begin
+                driving            <= 0;
+                transaction_active <= 0;
+                send_ready         <= 0;
+
+            end else begin
+                // Start a new transaction
+                if (!transaction_active && send_valid) begin
+                    driving            <= 1;
+                    transaction_active <= 1;
+                    send_ready         <= 1;
+                end
+
+                // Keep send_ready high during transaction
+                if (transaction_active)
+                    send_ready <= 1;
+
+                // End transaction on last packet
+                if (driving && ack) begin
+                    driving            <= 0;
+                    transaction_active <= 0;
+                end
+            end
         end
     end
 
-    // Receive logic
+    // --- Receiving logic ---
     always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) begin
-            recv_valid <= 0;
-            recv_data  <= 0;
-        end else if(!bus_grant && bus_valid === 1'b1) begin
-            recv_valid <= 1;
-            recv_data  <= bus_data;
+        if (!rst_n) begin
+            recv_valid           <= 0;
+            recv_data            <= 0;
+            first_pkt_received   <= 0;
+            allowed_source       <= 0;
+            allowed_dest         <= 0;
+            bus_ready            <= 0;
+
         end else begin
-            recv_valid <= 0;
+            if (bus_valid === 1'b1) begin
+
+                // Grab src and dest from first packet
+                if (!first_pkt_received) begin
+                    allowed_source      <= bus_data[5:4];
+                    allowed_dest        <= bus_data[3:2];
+                    first_pkt_received  <= 1;
+                end
+
+                // Only allow reading if this module is source or destination
+                if (source_id == allowed_source || source_id == allowed_dest) begin
+                    recv_valid <= 1;
+                    recv_data  <= bus_data;
+                    bus_ready  <= 1;
+                end else begin
+                    recv_valid <= 0;
+                    recv_data  <= 0;
+                    bus_ready  <= 0;
+                end
+
+            end else begin
+                recv_valid <= 0;
+                recv_data  <= 0;
+                bus_ready  <= 0;
+                first_pkt_received <= 0; // ready for next transaction
+            end
         end
     end
 
 endmodule
-
-//wait i bl
-
-// // (This is just me ironing out my thoughts lol)
-// module data_bus(
-//     input wire clk, 
-//     input wire rst_n,
-
-//     // ports (for sending to bus)
-//     input wire valid, // data to send is valid
-//     input wire [7:0] data, // data to send
-//     output wire ready, // we sent it... 
-
-//     input wire [1:0] source_id;
-
-//     // outputs (for receiving from bus)
-//     input wire ready_in, // module is ready to receive inputs
-//     output wire valid_in, // we are receiving valid data
-//     output wire [7:0] data_in, // the data
-
-//     // actual bus
-//     inout wire [7:0] bus_line, // actual bus_line (assuming modules only use when have ACK)
-//     inout wire bus_ready,
-//     inout wire bus_valid, // data is valid
-// );
-
-// // Internal states:
-// reg [7:0] packet = 0;
-// reg [7:0] received_data = 0;
-// reg is_target = 0;
-
-// // Receiving from bus
-// always @(posedge clk) begin 
-//     if (rst_n! || !ready_in) begin
-//         data <= 0;
-//         valid_in <= 0;
-//         received_data <= 0;
-
-//     end else begin
-//         // if bus data is valid and ready to receive:
-//         if(ready_in && bus_valid) begin 
-//             packet <= bus_line; // get the first packet from shared bus            
-            
-//             // Check if you (the module connected to the instance) are the target/destination
-//             if(packet[5:4] == source_id || is_target) begin 
-//                 received_data <= bus_line;
-//                 valid_in <= 1;
-//                 is_target <= 1;
-//                 assign bus_ready <= 1; // we got the data, gimme next packet
-
-//             end else begin 
-//                 valid_in <= 0;
-//                 received_data <= 0;
-//                 is_target <= 0
-//             end 
-
-//         // Not ready to receive
-//         end else if(bus_data && is_target) begin
-//             is_target <= 1;
-//             assign bus_ready <= 0;
-
-//         // You are not the destination...
-//         end else begin 
-//             valid_in <= 0;
-//             received_data <= 0;
-//             is_target <= 0;
-//         end 
-//     end 
-// end
-
-// // Sending --> assuming only the correct module is sending to bus (i.e. arbiter takes care of it)
-// always @(posedge clk) begin 
-//     if(!rst_n) begin 
-//         ready <= 0
-//     end else begin
-//         // if data is valid and other module is ready, send it...
-//         if(valid && bus_ready) begin
-//             assign bus_valid <= 1;
-//             assign bus_line <= data;
-//             ready <= 1; // we sent it
-//         end else begin
-//             ready <= 0; // module has to stall
-//         end
-//     end 
-// end 
-
-// assign data_in = received_data;
-
-// endmodule
