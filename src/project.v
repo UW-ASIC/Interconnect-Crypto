@@ -15,13 +15,75 @@ module tt_um_example (
     input  wire       clk,      // clock
     input  wire       rst_n     // reset_n - low to reset
 );
+  // Shared tri-state bus (Bot databus instances are wired to the same bus)
+  wire [7:0] shared_bus_data;
+  wire       shared_bus_valid;
 
-  // All output pins must be assigned. If not used, assign to 0.
-  assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
-  assign uio_out = 0;
-  assign uio_oe  = 0;
+  // Simple arbiter test (I'm manually setting which bus is sending and receiving data)
+  wire grant_bus_to_A = ui_in[0];
+  wire grant_bus_to_B = ui_in[1];
+
+  // Receiving Wires (where each bus output data they received)
+  wire [7:0] receive_A;
+  wire [7:0] receive_B;
+
+  wire valid_A;
+  wire valid_B;
+
+  data_bus_device busA (
+      .clk(clk),
+      .rst_n(rst_n),
+
+      .send_valid(ui_in[0]),
+      .send_data(ui_in[7:0]),
+      .send_ready(),
+
+      .recv_valid(valid_A),
+      .recv_data(receive_A),
+
+      .bus_grant(grant_bus_to_A),
+
+      .bus_data(shared_bus_data),
+      .bus_valid(shared_bus_valid)
+  );
+
+  data_bus_device busB (
+      .clk(clk),
+      .rst_n(rst_n),
+
+      .send_valid(ui_in[1]),
+      .send_data(ui_in[7:0]),
+      .send_ready(),
+
+      .recv_valid(valid_B),
+      .recv_data(receive_B),
+
+      .bus_grant(grant_bus_to_B),
+
+      .bus_data(shared_bus_data),
+      .bus_valid(shared_bus_valid)
+  );
+
+  // Check up on receive_B, valid_B and valid_A
+  assign uo_out = {receive_B[7:2], valid_B, valid_A};
+  
+  // Defaults for unused inputs and outputs
+  assign uio_out = 8'b0;
+  assign uio_oe  = 8'b0;
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, clk, rst_n, 1'b0};
+  wire _unused = &{ena, uio_in 1'b0};
 
 endmodule
+
+/*
+
+Essentially how I'm trying to test the databus
+1. Set data payload in ui_in[7:2]
+2. Allow A to transmit by setting ui_in[0] = 1
+3. A drives "shared_bus_data"
+4. B receives it and stores in "receive_B"
+5. A sees it too since its wired to the same bus and stores it in "receive_A"
+6. Do the same but reversed (ui_in[1] = 1)
+
+*/
