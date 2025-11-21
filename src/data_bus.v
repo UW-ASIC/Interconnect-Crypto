@@ -19,7 +19,6 @@ module data_bus(
 
 
     // --- Internal state ---
-    reg driving;
     reg ownership;
 
     // Separate flags for send/receive
@@ -28,19 +27,22 @@ module data_bus(
     reg bus_ready;
 
     // Grab and store source/destination from first packet
-    reg [2:0] allowed_source; 
-    reg [2:0] allowed_dest;   
+    reg [2:0] allowed_source = 4; 
+    reg [2:0] allowed_dest = 4;   
 
-    integer i = 0;
+    reg [2:0] i = 0; // wait 3 cycles for control
+
+    // wires
+    wire is_control = (source_id == 2'b11 && send_valid);
+    wire is_bus_owner = (i == 3 && source_id == allowed_source[1:0]);
 
     // --- Tri-state bus drivers ---
-    assign bus_data  = (driving && ownership) ? send_data : 8'bz;
-    assign bus_valid = (driving && ownership) ? 1'b1 : 1'bz;
+    assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
+    assign bus_valid = (ownership && (is_control || is_bus_owner) && send_valid) ? 1'b1 : 1'bz;
 
     // --- Sending logic ---
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            driving             <= 0;
             ownership           <= 0;
             send_ready          <= 0;
             first_pkt_received  <= 0;
@@ -48,48 +50,43 @@ module data_bus(
         end else begin
 
             if(ack) begin  // reset all internal signals
-                driving <= 0;
-                allowed_source <= 4;
-                allowed_dest <= 4;
-                send_ready <= 0;
-                first_pkt_received <= 0;
-                ownership <= 0;    
-                read_address <= 0;
-            end 
+                first_pkt_received  <= 0;
+                send_ready          <= 0;
+                ownership           <= 0;    
+                i                   <= 0;
+                read_address        <= 0;
 
-            if(source_id == 11 && send_valid) begin  // if control, just let them send whatever they feel like (if they assert send_valid)
-                bus_data <= send_data;
-                bus_valid <= send_valid;
-                driving <= 1;
-                first_pkt_received <= 1;
-                read_address <= 1; // modules should read the first packet
+            end else begin
 
-            end else if (source_id == 11 && send_valid && first_pkt_received) begin 
-                bus_data <= send_data;
-                bus_valid <= send_valid;
-                driving <= 1;
-                read_address <= 0; // modules should read the first packet
-                i = i + 1;
-            
-            end else if(i == 3 && source_id == allowed_source[1:0]) begin // now src has bus ownership
-                ownership <= 1;
-            end 
-            
-            if(ownership) begin  // you are the owner
-                if(send_valid && bus_ready) begin // you have valid data + bus is ready --> send it over captain!
-                    bus_data <= send_data;
-                    bus_valid <= send_valid;
-                    driving <= 1;
-                    send_ready <= bus_ready;
+                if(send_valid && !first_pkt_received) begin // if ack was asserted (or start of program), read the first packet
+                    first_pkt_received  <= 1;
+                    read_address        <= 1; // modules should read the first packet
+
+                end else if (send_valid && first_pkt_received) begin  // first packet already read
+                    read_address    <= 0;
                 end 
 
-            end else begin // you are not the owner --> don't touch!
-                driving <= 0;
-                send_ready <= 0;
+                if(source_id == 2'b11 && send_valid) begin  // if control, just let them send whatever they feel like (if they assert send_valid)
+                    ownership <= 1;
+
+                end else if ((source_id == 2'b11 || source_id == allowed_source[1:0]) && send_valid && first_pkt_received) begin  // wait 3 cycles
+                    i <= i + 1;
+                
+                end else if(i == 3 && source_id == allowed_source[1:0]) begin // now src has bus ownership
+                    ownership <= 1;
+                end 
+                
+                if(ownership) begin  // you are the owner
+                    if(send_valid && bus_ready) begin // you have valid data + bus is ready --> send it over captain!
+                        send_ready <= bus_ready;
+                    end 
+
+                end else begin // you are not the owner --> don't touch!
+                    send_ready <= 0;
+                end
             end
         end
     end
-
 
 
     // --- Receiving logic ---
@@ -97,16 +94,21 @@ module data_bus(
         if (!rst_n) begin
             recv_valid           <= 0;
             recv_data            <= 0;
-            first_pkt_received   <= 0;
             allowed_source       <= 0;
             allowed_dest         <= 0;
             bus_ready            <= 0;
 
         end else begin
+
+            if(ack) begin 
+                allowed_source <= 4;
+                allowed_dest <= 4;
+            end 
+
             if (bus_valid === 1'b1) begin
 
                 // Grab src and dest from first packet
-                if (read_address) begin
+                if (read_address && !ack) begin
                     allowed_source      <= {1'b0, bus_data[5:4]};
                     allowed_dest        <= {1'b0, bus_data[3:2]};
                 end
