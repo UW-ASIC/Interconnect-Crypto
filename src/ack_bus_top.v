@@ -20,8 +20,8 @@ module ack_bus_top (
     output wire [1:0] ack_id_bus_o
 );
     // Shared open-drain nets
-    tri1       ack_valid_n_bus;
-    tri1 [1:0] ack_id_bus;
+    wire       ack_valid_n_bus;
+    wire [1:0] ack_id_bus;
 
     // Expose for debug
     assign ack_valid_n_bus_o = ack_valid_n_bus;
