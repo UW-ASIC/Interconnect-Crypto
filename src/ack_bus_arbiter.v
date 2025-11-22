@@ -21,7 +21,8 @@ module ack_bus_arbiter (
     output wire       ack_event            // 1 when any ack is on the bus
 );
     // Active-high bus-valid
-    assign ack_event = (ack_valid_n_bus == 1'b0);
+    // assign ack_event = (ack_valid_n_bus == 1'b0) ? 1'b1 : 1'b0;
+    assign ack_event = (req_mem | req_sha | req_aes | req_ctrl);
 
     // Combinational arbitration
     always @* begin
