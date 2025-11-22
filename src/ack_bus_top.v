@@ -13,7 +13,7 @@ module ack_bus_top (
 
     // Broadcast winner + event
     output wire [1:0] winner_source_id,
-    output wire       ack_event,
+    output wire       ack_event
 
     // Debug/monitor (resolved bus)
     // output wire       ack_valid_n_bus_o,
