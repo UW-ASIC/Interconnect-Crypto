@@ -34,20 +34,17 @@ module ack_bus_top (
     wire [1:0] ID_CTRL = 2'b11;
 
     // Open-drain driving: drive 0 on your 0-bits while requesting, else 'z
+    assign ack_valid_n_bus = (req_mem | req_sha | req_aes | req_ctrl)  ? 1'b0 : 1'bz;
     // MEM
-    assign ack_valid_n_bus = req_mem  ? 1'b0 : 1'bz;
     assign ack_id_bus[1]   = (req_mem  && (ID_MEM[1]  == 1'b0)) ? 1'b0 : 1'bz;
     assign ack_id_bus[0]   = (req_mem  && (ID_MEM[0]  == 1'b0)) ? 1'b0 : 1'bz;
     // SHA
-    assign ack_valid_n_bus = req_sha  ? 1'b0 : 1'bz;
     assign ack_id_bus[1]   = (req_sha  && (ID_SHA[1]  == 1'b0)) ? 1'b0 : 1'bz;
     assign ack_id_bus[0]   = (req_sha  && (ID_SHA[0]  == 1'b0)) ? 1'b0 : 1'bz;
     // AES
-    assign ack_valid_n_bus = req_aes  ? 1'b0 : 1'bz;
     assign ack_id_bus[1]   = (req_aes  && (ID_AES[1]  == 1'b0)) ? 1'b0 : 1'bz;
     assign ack_id_bus[0]   = (req_aes  && (ID_AES[0]  == 1'b0)) ? 1'b0 : 1'bz;
     // CTRL
-    assign ack_valid_n_bus = req_ctrl ? 1'b0 : 1'bz;
     assign ack_id_bus[1]   = (req_ctrl && (ID_CTRL[1] == 1'b0)) ? 1'b0 : 1'bz;
     assign ack_id_bus[0]   = (req_ctrl && (ID_CTRL[0] == 1'b0)) ? 1'b0 : 1'bz;
 
