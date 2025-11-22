@@ -33,6 +33,16 @@ BUS_CTRL = 0b11
 """
 
 """
+# Outputs
+RECEIVE_DATA = dut.uo_out.value
+
+RECEIVE_VALIDA = dut.uio_out.value[0]
+RECEIVE_VALIDB = dut.uio_out.value[1]
+RECEIVE_VALIDCTRL = dut.uio_out.value[2]
+
+SEND_READYA = dut.uio_out.value[3]
+SEND_READYB = dut.uio_out.value[4]
+SEND_READYCTRL = dut.uio_out.value[5]
 """
 
 
@@ -114,6 +124,7 @@ async def test_reset(dut):
     dut._log.info("Reset Test Passed")
     
 @cocotb.test()
+
 
 """
 TESTS:
