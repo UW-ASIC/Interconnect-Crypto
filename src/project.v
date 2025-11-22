@@ -33,17 +33,6 @@ module tt_um_example (
 
   wire ACK = uio_in[3];
 
-  // Simple arbiter test (I'm manually setting which bus is sending and receiving data)
-//   wire grant_bus_to_A = ui_in[0];
-//   wire grant_bus_to_B = ui_in[1];
-
-//   // Receiving Wires (where each bus output data they received)
-//   wire [7:0] receive_A;
-//   wire [7:0] receive_B;
-
-//   wire valid_A;
-//   wire valid_B;
-
   data_bus busA (
       .clk(clk),
       .rst_n(rst_n),
@@ -84,7 +73,7 @@ module tt_um_example (
       .clk(clk),
       .rst_n(rst_n),
 
-      .send_valid(ui_in[2]),
+      .send_valid(uio_in[2]),
       .send_data(ui_in[7:0]),
       .send_ready(send_readyCTRL),
       .ack(ACK),
@@ -100,22 +89,20 @@ module tt_um_example (
     );
 
 
-assign uo_out = (uio_in == 2'b01) ? recv_dataA :
-                (uio_in == 2'b01) ? recv_dataB :
-                recv_dataCTRL;
+  assign uo_out = (uio_in[5:4] == 2'b01) ? recv_dataA :
+                  (uio_in[5:4] == 2'b00) ? recv_dataB :
+                  recv_dataCTRL;
 
-assign uio_out[0] = recv_validA;
-assign uio_out[1] = recv_validB;
-assign uio_out[2] = recv_validCTRL;
+  assign uio_out[0] = recv_validA;
+  assign uio_out[1] = recv_validB;
+  assign uio_out[2] = recv_validCTRL;
 
-assign uio_out[3] = send_readyA;
-assign uio_out[4] = send_readyB;
-assign uio_out[5] = send_readyCTRL;
-
-
+  assign uio_out[3] = send_readyA;
+  assign uio_out[4] = send_readyB;
+  assign uio_out[5] = send_readyCTRL;
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, uio_in, 1'b0};
+  wire _unused = &{ena, 1'b0};
 
 endmodule
 

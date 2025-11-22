@@ -18,18 +18,17 @@ module data_bus(
     inout  wire        bus_valid
 );
 
-
     // --- Internal state ---
     reg ownership;
 
     // Separate flags for send/receive
     reg first_pkt_received;
     reg read_address;
-    reg bus_ready;
+    reg bus_ready = 1;
 
     // Grab and store source/destination from first packet
-    reg [2:0] allowed_source = 4; 
-    reg [2:0] allowed_dest = 4;   
+    reg [2:0] allowed_source = 7; 
+    reg [2:0] allowed_dest = 7;   
 
     reg [2:0] i = 0; // wait 3 cycles for control
 
@@ -41,94 +40,127 @@ module data_bus(
     assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
     assign bus_valid = (ownership && (is_control || is_bus_owner) && send_valid) ? 1'b1 : 1'bz;
 
-    // --- Sending logic ---
-    always @(posedge clk or negedge rst_n) begin
+// --- Sending logic ---
+    always @(*) begin
         if (!rst_n) begin
-            ownership           <= 0;
-            send_ready          <= 0;
-            first_pkt_received  <= 0;
+            ownership           = 0;
+            send_ready          = 1; // Default High on Reset
+            first_pkt_received  = 0;
+            i                   = 0;
+            read_address        = 0;
+            $display("[%0t] source_id: %h, RESET asserted", $time, source_id);
 
         end else begin
-
-            if(ack) begin  // reset all internal signals
-                first_pkt_received  <= 0;
-                send_ready          <= 0;
-                ownership           <= 0;    
-                i                   <= 0;
-                read_address        <= 0;
+            if(ack) begin 
+                first_pkt_received  = 0;
+                send_ready          = 1;
+                ownership           = 0;    
+                i                   = 0;
+                read_address        = 0;
+                $display("[%0t] source_id: %h, ack asserted", $time, source_id);
 
             end else begin
-
-                if(send_valid && !first_pkt_received) begin // if ack was asserted (or start of program), read the first packet
-                    first_pkt_received  <= 1;
-                    read_address        <= 1; // modules should read the first packet
-
-                end else if (send_valid && first_pkt_received) begin  // first packet already read
-                    read_address    <= 0;
+                // ==========================================================
+                // PART 1: UPDATE INTERNAL FLAGS (Run this independently)
+                // ==========================================================
+                if(bus_valid && !first_pkt_received) begin 
+                    first_pkt_received  = 1;
+                    read_address        = 1; 
+                    $display("[%0t] source_id: %h, first packet received", $time, source_id);
+                end else if (bus_valid && first_pkt_received) begin
+                    read_address        = 0;
                 end 
 
-                if(source_id == 2'b11 && send_valid) begin  // if control, just let them send whatever they feel like (if they assert send_valid)
-                    ownership <= 1;
+                // ==========================================================
+                // PART 2: HANDLE OWNERSHIP & READY (Run this independently)
+                // ==========================================================
+                if(source_id == 2'b11 && send_valid) begin
+                    ownership = 1;
+                    send_ready = 1; // MUST be 1 immediately
+                end
 
-                end else if ((source_id == 2'b11 || source_id == allowed_source[1:0]) && send_valid && first_pkt_received) begin  // wait 3 cycles
-                    i <= i + 1;
-                
-                end else if(i == 3 && source_id == allowed_source[1:0]) begin // now src has bus ownership
-                    ownership <= 1;
+
+                // PRIORITY 1: Existing Ownership
+                if(ownership) begin 
+                    if(send_valid && bus_ready) begin
+                        $display("[%0t] source_id: %h, sending data", $time, source_id);
+                        send_ready = 1; 
+                    end else begin
+                        send_ready = bus_ready; 
+                    end
                 end 
                 
-                if(ownership) begin  // you are the owner
-                    if(send_valid && bus_ready) begin // you have valid data + bus is ready --> send it over captain!
-                        send_ready <= bus_ready;
-                    end 
-
-                end else begin // you are not the owner --> don't touch!
-                    send_ready <= 0;
+                // // PRIORITY 2: Control Logic (ID 3)
+                // // CRITICAL FIX: This runs even if first_pkt_received was just set in Part 1
+                // else if(source_id == 2'b11 && send_valid) begin
+                //     ownership <= 1;
+                //     send_ready <= 1; // MUST be 1 immediately
+                //     $display("[%0t] source_id: %h, Control taking ownership", $time, source_id);
+                // end 
+                
+                // PRIORITY 3: Normal Modules (Must wait for first packet flag)
+                else if ((source_id == allowed_source[1:0]) && send_valid && first_pkt_received) begin
+                    if (i < 3) begin
+                        i <= i + 1;
+                        send_ready = 0; 
+                        $display("[%0t] source_id: %h, waiting... (%d/3)", $time, source_id, i);
+                    end else begin
+                        ownership = 1;
+                        send_ready = 1;
+                        i = 0;
+                        $display("[%0t] source_id: %h, acquired ownership", $time, source_id);
+                    end
+                end 
+                
+                // PRIORITY 4: Not Owner / Blocked
+                else begin
+                    if (send_valid) 
+                        $display("[%0t] source_id: %h, blocked (not owner/not ready)", $time, source_id);
                 end
             end
         end
     end
 
-
     // --- Receiving logic ---
-    always @(posedge clk or negedge rst_n) begin
+    always @(*) begin
         if (!rst_n) begin
-            recv_valid           <= 0;
-            recv_data            <= 0;
-            allowed_source       <= 0;
-            allowed_dest         <= 0;
-            bus_ready            <= 0;
+            recv_valid           = 0;
+            recv_data            = 0;
+            allowed_source       = 0;
+            allowed_dest         = 0;
+            bus_ready            = 1;
 
         end else begin
 
             if (ack) begin 
-                allowed_source <= 4;
-                allowed_dest <= 4;
+                allowed_source = 7;
+                allowed_dest = 7;
             end 
 
             if (bus_valid === 1'b1) begin
 
                 // Grab src and dest from first packet
                 if (read_address && !ack) begin
-                    allowed_source      <= {1'b0, bus_data[5:4]};
-                    allowed_dest        <= {1'b0, bus_data[3:2]};
+                    allowed_source      = {1'b0, bus_data[3:2]};
+                    allowed_dest        = {1'b0, bus_data[5:4]};
                 end
 
                 // Only allow reading if this module is source or destination
-                if (source_id == allowed_source[1:0] || source_id == allowed_dest[1:0]) begin
-                    recv_valid <= 1;
-                    recv_data  <= bus_data;
-                    bus_ready  <= 1;
+                if (source_id == allowed_source[1:0] || source_id == 2'b11 || source_id == allowed_dest[1:0]) begin
+                    recv_valid = 1;
+                    recv_data  = bus_data;
+                    bus_ready  = 1;
+
 
                 end else begin
-                    recv_valid <= 0;
-                    recv_data  <= 0;
-                    bus_ready  <= 0;
+                    recv_valid = 0;
+                    recv_data  = 0;
+                    bus_ready  = 0;
                 end
 
             end else begin
-                recv_valid <= 0;
-                recv_data  <= 0;
+                recv_valid = 0;
+                recv_data  = 0;
             end
         end
     end
