@@ -72,7 +72,6 @@ module ack_bus_top (
     assign ctrl_id0 = (ID_CTRL[0] == 1'b0 && req_ctrl) ? 1'b0 : 1'b1;
 
     // Resolved ID on the bus (bitwise AND of all contenders' IDs)
-    wire [1:0] ack_id_bus;
     assign ack_id_bus[1] = mem_id1 &
                            sha_id1 &
                            aes_id1 &
