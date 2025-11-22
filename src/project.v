@@ -38,7 +38,7 @@ module tt_um_example (
     .ack_event (uo_out[6]),
     .ack_valid_n_bus_o (ack_valid),
     .ack_id_bus_o (ack_id_bus)
-  )
+  );
 
   // List all unused inputs to prevent warnings
   wire _unused = &{ena, clk, rst_n, ui_in[7:4], uio_in, 1'b0};
