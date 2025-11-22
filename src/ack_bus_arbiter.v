@@ -26,23 +26,23 @@ module ack_bus_arbiter (
     // Combinational arbitration
     always @* begin
         // defaults
-        ack_ready_to_ctrl <= 1'b0;
-        ack_ready_to_aes  <= 1'b0;
-        ack_ready_to_sha  <= 1'b0;
-        ack_ready_to_mem  <= 1'b0;
-        winner_source_id  <= 2'b11; // don't-care if no event
+        ack_ready_to_ctrl = 1'b0;
+        ack_ready_to_aes  = 1'b0;
+        ack_ready_to_sha  = 1'b0;
+        ack_ready_to_mem  = 1'b0;
+        winner_source_id  = 2'b11; // don't-care if no event
 
         if (ack_event) begin
             
 
             // Grant READY only to the requester whose ID matches the bus
             case (ack_id_bus)
-                2'b00 : if (req_mem)  ack_ready_to_mem  <= 1'b1;
-                2'b01 : if (req_sha)  ack_ready_to_sha  <= 1'b1;
-                2'b10 : if (req_aes)  ack_ready_to_aes  <= 1'b1;
-                default : if (req_ctrl) ack_ready_to_ctrl <= 1'b1; 
+                2'b00 : if (req_mem)  ack_ready_to_mem  = 1'b1;
+                2'b01 : if (req_sha)  ack_ready_to_sha  = 1'b1;
+                2'b10 : if (req_aes)  ack_ready_to_aes  = 1'b1;
+                default : if (req_ctrl) ack_ready_to_ctrl = 1'b1; 
             endcase
         end
     end
-    assign winner_source_id = ack_id_bus;
+    // assign winner_source_id = ack_id_bus;
 endmodule
