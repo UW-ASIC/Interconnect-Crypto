@@ -35,7 +35,7 @@ module ack_bus_arbiter (
 
         if (ack_valid_n_bus == 1'b0) begin
             winner_source_id = ack_id_bus;
-            Grant READY only to the requester whose ID matches the bus
+            // Grant READY only to the requester whose ID matches the bus
             case (ack_id_bus)
                 2'b00 : if (req_mem)  ack_ready_to_mem  = 1'b1;
                 2'b01 : if (req_sha)  ack_ready_to_sha  = 1'b1;
