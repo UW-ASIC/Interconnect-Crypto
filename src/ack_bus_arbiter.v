@@ -33,8 +33,7 @@ module ack_bus_arbiter (
         winner_source_id  = 2'b11; // don't-care if no event
 
         if (ack_event) begin
-            
-
+            winner_source_id = ack_id_bus;
             // Grant READY only to the requester whose ID matches the bus
             case (ack_id_bus)
                 2'b00 : if (req_mem)  ack_ready_to_mem  = 1'b1;
