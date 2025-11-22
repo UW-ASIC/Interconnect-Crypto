@@ -55,7 +55,7 @@ module ack_bus_top (
     assign ack_id_bus[0]   = (req_ctrl && (ID_CTRL[0] == 1'b0)) ? 1'b0 : 1'bz;
 
     // Arbiter reads the bus & grants one-hot to the winner
-    ack_bus_arbiter_od u_ack_arb (
+    ack_bus_arbiter u_ack_arb (
         .ack_valid_n_bus     (ack_valid_n_bus),
         .ack_id_bus          (ack_id_bus),
         .req_mem             (req_mem),
