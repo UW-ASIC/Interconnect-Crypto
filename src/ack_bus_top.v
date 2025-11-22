@@ -1,7 +1,6 @@
-module ack_bus_top (
-    input  wire       clk,
-    input  wire       rst_n,
+`default_nettype none
 
+module tt_um_ack_bus_top (
     // Requests from modules
     input  wire       req_mem,
     input  wire       req_sha,
