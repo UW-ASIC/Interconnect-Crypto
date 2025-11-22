@@ -7,14 +7,15 @@ module data_bus(
     input  wire [7:0]  send_data,   // data (to send)
     output reg         send_ready,  // sender can send
     input  wire        ack,         // marks last packet to send
+
     // Receiving
-    input  wire [1:0]  source_id,  // this module's ID
-    output reg         recv_valid, // valid data for this module
-    output reg [7:0]   recv_data,  // data being received
+    input  wire [1:0]  source_id,   // this module's ID
+    output reg         recv_valid,  // valid data for this module
+    output reg  [7:0]  recv_data,   // data being received
 
     // Shared bus
     inout  wire [7:0]  bus_data,        
-    inout  wire        bus_valid,
+    inout  wire        bus_valid
 );
 
 
@@ -100,7 +101,7 @@ module data_bus(
 
         end else begin
 
-            if(ack) begin 
+            if (ack) begin 
                 allowed_source <= 4;
                 allowed_dest <= 4;
             end 

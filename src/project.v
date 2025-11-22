@@ -19,6 +19,13 @@ module tt_um_example (
   wire [7:0] shared_bus_data;
   wire       shared_bus_valid;
 
+  wire send_readyA;
+  wire send_readyB;
+  wire send_readyCTRL;
+
+  wire ACK = 0;
+
+
   // Simple arbiter test (I'm manually setting which bus is sending and receiving data)
   wire grant_bus_to_A = ui_in[0];
   wire grant_bus_to_B = ui_in[1];
@@ -30,35 +37,55 @@ module tt_um_example (
   wire valid_A;
   wire valid_B;
 
-  data_bus_device busA (
+  data_bus busA (
       .clk(clk),
       .rst_n(rst_n),
 
-      .send_valid(ui_in[0]),
-      .send_data(ui_in[7:0]),
-      .send_ready(),
+      .send_valid(ui_in[0]), // input
+      .send_data(ui_in[7:0]), // input
+      .send_ready(send_readyA),
+      .ack(ACK), // input
+
+      .source_id(2'b01), // SHA Id
 
       .recv_valid(valid_A),
       .recv_data(receive_A),
-
-      .bus_grant(grant_bus_to_A),
 
       .bus_data(shared_bus_data),
       .bus_valid(shared_bus_valid)
   );
 
-  data_bus_device busB (
+  data_bus busB (
       .clk(clk),
       .rst_n(rst_n),
 
-      .send_valid(ui_in[1]),
-      .send_data(ui_in[7:0]),
-      .send_ready(),
+      .send_valid(ui_in[1]), // input
+      .send_data(ui_in[7:0]), // input
+      .send_ready(send_readyB),
+      .ack(ACK), // input
 
       .recv_valid(valid_B),
       .recv_data(receive_B),
 
-      .bus_grant(grant_bus_to_B),
+      .source_id(2'b00), // input
+
+      .bus_data(shared_bus_data),
+      .bus_valid(shared_bus_valid)
+  );
+
+  data_bus control ( // Control 
+      .clk(clk),
+      .rst_n(rst_n),
+
+      .send_valid(ui_in[2]),
+      .send_data(ui_in[7:0]),
+      .send_ready(send_readyCTRL),
+      .ack(ACK),
+
+      .source_id(2'b11),
+
+      .recv_valid(),
+      .recv_data(),
 
       .bus_data(shared_bus_data),
       .bus_valid(shared_bus_valid)
@@ -72,7 +99,7 @@ module tt_um_example (
   assign uio_oe  = 8'b0;
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, uio_in 1'b0};
+  wire _unused = &{ena, uio_in, 1'b0};
 
 endmodule
 
