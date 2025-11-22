@@ -50,7 +50,7 @@ module ack_bus_top (
     // assign ack_id_bus[0]   = (req_ctrl && (ID_CTRL[0] == 1'b0)) ? 1'b0 : 1'b1;
 
     // ID bit[1] contributions
-    wire mem_id1
+    wire mem_id1;
     wire sha_id1;
     wire aes_id1;
     wire ctrl_id1;
