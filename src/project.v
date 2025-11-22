@@ -23,33 +23,40 @@ module tt_um_example (
   wire send_readyB;
   wire send_readyCTRL;
 
-  wire ACK = 0;
+  wire recv_validA;
+  wire recv_validB;
+  wire recv_validCTRL;
 
+  wire [7:0] recv_dataA;
+  wire [7:0] recv_dataB;
+  wire [7:0] recv_dataCTRL;
+
+  wire ACK = uio_in[3];
 
   // Simple arbiter test (I'm manually setting which bus is sending and receiving data)
-  wire grant_bus_to_A = ui_in[0];
-  wire grant_bus_to_B = ui_in[1];
+//   wire grant_bus_to_A = ui_in[0];
+//   wire grant_bus_to_B = ui_in[1];
 
-  // Receiving Wires (where each bus output data they received)
-  wire [7:0] receive_A;
-  wire [7:0] receive_B;
+//   // Receiving Wires (where each bus output data they received)
+//   wire [7:0] receive_A;
+//   wire [7:0] receive_B;
 
-  wire valid_A;
-  wire valid_B;
+//   wire valid_A;
+//   wire valid_B;
 
   data_bus busA (
       .clk(clk),
       .rst_n(rst_n),
 
-      .send_valid(ui_in[0]), // input
+      .send_valid(uio_in[0]), // input
       .send_data(ui_in[7:0]), // input
       .send_ready(send_readyA),
       .ack(ACK), // input
 
       .source_id(2'b01), // SHA Id
 
-      .recv_valid(valid_A),
-      .recv_data(receive_A),
+      .recv_valid(recv_validA),
+      .recv_data(recv_dataA),
 
       .bus_data(shared_bus_data),
       .bus_valid(shared_bus_valid)
@@ -59,13 +66,13 @@ module tt_um_example (
       .clk(clk),
       .rst_n(rst_n),
 
-      .send_valid(ui_in[1]), // input
+      .send_valid(uio_in[1]), // input
       .send_data(ui_in[7:0]), // input
       .send_ready(send_readyB),
       .ack(ACK), // input
 
-      .recv_valid(valid_B),
-      .recv_data(receive_B),
+      .recv_valid(recv_validB),
+      .recv_data(recv_dataB),
 
       .source_id(2'b00), // input
 
@@ -84,19 +91,19 @@ module tt_um_example (
 
       .source_id(2'b11),
 
-      .recv_valid(),
-      .recv_data(),
+      .recv_valid(recv_validCTRL),
+      .recv_data(recv_dataCTRL),
 
       .bus_data(shared_bus_data),
       .bus_valid(shared_bus_valid)
   );
 
   // Check up on receive_B, valid_B and valid_A
-  assign uo_out = {receive_B[7:2], valid_B, valid_A};
-  
-  // Defaults for unused inputs and outputs
-  assign uio_out = 8'b0;
-  assign uio_oe  = 8'b0;
+
+  //assign uo_out = {receive_B[7:2], valid_B, valid_A};
+
+    //   assign uio_out = 8'b0;
+    //   assign uio_oe  = 8'b0;
 
   // List all unused inputs to prevent warnings
   wire _unused = &{ena, uio_in, 1'b0};
