@@ -22,8 +22,8 @@ module tt_um_example (
   assign uio_out = 0;
   assign uio_oe  = 0;
 
-  wire       ack_valid;
-  wire [1:0] ack_id_bus;
+  // wire       ack_valid;
+  // wire [1:0] ack_id_bus;
 
   ack_bus_top ack_bus_top_inst (
     .req_mem (ui_in[0]),
@@ -35,9 +35,9 @@ module tt_um_example (
     .ack_ready_to_aes (uo_out[2]),
     .ack_ready_to_ctrl (uo_out[3]),
     .winner_source_id (uo_out[5:4]),
-    .ack_event (uo_out[6]),
-    .ack_valid_n_bus_o (ack_valid),
-    .ack_id_bus_o (ack_id_bus)
+    .ack_event (uo_out[6])
+    // .ack_valid_n_bus_o (ack_valid),
+    // .ack_id_bus_o (ack_id_bus)
   );
 
   // List all unused inputs to prevent warnings

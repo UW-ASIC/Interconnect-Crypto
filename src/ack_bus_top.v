@@ -16,16 +16,16 @@ module ack_bus_top (
     output wire       ack_event,
 
     // Debug/monitor (resolved bus)
-    output wire       ack_valid_n_bus_o,
-    output wire [1:0] ack_id_bus_o
+    // output wire       ack_valid_n_bus_o,
+    // output wire [1:0] ack_id_bus_o
 );
     // Shared open-drain nets
     wire       ack_valid_n_bus;
     wire [1:0] ack_id_bus;
 
     // Expose for debug
-    assign ack_valid_n_bus_o = ack_valid_n_bus;
-    assign ack_id_bus_o      = ack_id_bus;
+    // assign ack_valid_n_bus_o = ack_valid_n_bus;
+    // assign ack_id_bus_o      = ack_id_bus;
 
     // Fixed IDs
     wire [1:0] ID_MEM  = 2'b00;
