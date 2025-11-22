@@ -11,37 +11,37 @@ project:
   tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
 
   # Your top module name must start with "tt_um_". Make it unique by including your github username:
-  top_module:  "tt_um_ack_bus_top"
+  top_module:  "tt_um_example"
 
   # List your project's source files here.
   # Source files must be in ./src and you must list each source file separately, one per line.
   # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
   source_files:
+    - project.v
     - ack_bus_top.v
     - ack_bus_arbiter.v
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 pinout:
   # Inputs
-  req_mem: ""
-  req_sha: ""
-  req_aes: ""
-  req_ctrl: ""
-  # ui[4]: ""
-  # ui[5]: ""
-  # ui[6]: ""
-  # ui[7]: ""
+  ui[0]: "REQ_MEM"
+  ui[1]: "REQ_SHA"
+  ui[2]: "REQ_AES"
+  ui[3]: "REQ_CTRL"
+  ui[4]: ""
+  ui[5]: ""
+  ui[6]: ""
+  ui[7]: ""
 
   # Outputs
-  ack_ready_to_mem: ""
-  ack_ready_to_sha: ""
-  ack_ready_to_aes: ""
-  ack_ready_to_ctrl: ""
-  winner_source_id[0]: ""
-  winner_source_id[1]: ""
-  ack_valid_n_bus_o: ""
-  ack_id_bus_o[0]: ""
-  ack_id_bus_o[1]: ""
+  uo[0]: "READY_TO_MEM"
+  uo[1]: "READY_TO_SHA"
+  uo[2]: "READY_TO_AES"
+  uo[3]: "READY_TO_CTRL"
+  uo[4]: "WINNER_ID_0"
+  uo[5]: "WINNER_ID_1"
+  uo[6]: "ACK_EVENT"
+  uo[7]: ""
 
   # Bidirectional pins
   uio[0]: ""

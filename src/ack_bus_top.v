@@ -1,6 +1,4 @@
-`default_nettype none
-
-module tt_um_ack_bus_top (
+module ack_bus_top (
     // Requests from modules
     input  wire       req_mem,
     input  wire       req_sha,
