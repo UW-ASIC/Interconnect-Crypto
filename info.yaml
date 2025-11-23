@@ -43,12 +43,12 @@ pinout:
   uo[7]: ""
 
   # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
-  uio[3]: ""
-  uio[4]: ""
-  uio[5]: ""
+  uio[0]: "recv_validA"
+  uio[1]: "recv_validB"
+  uio[2]: "recv_validCTRL"
+  uio[3]: "send_readyA"
+  uio[4]: "send_readyB"
+  uio[5]: "send_readyCTRL"
   uio[6]: ""
   uio[7]: ""
 
