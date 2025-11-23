@@ -46,18 +46,18 @@ module data_bus(
             ownership           = 0;
             send_ready          = 1; // Default High on Reset
             first_pkt_received  = 0;
-            i                   = 0;
+            // i                   = 0;
             read_address        = 0;
-            $display("[%0t] source_id: %h, RESET asserted", $time, source_id);
+            // $display("[%0t] source_id: %h, RESET asserted", $time, source_id);
 
         end else begin
             if(ack) begin 
                 first_pkt_received  = 0;
                 send_ready          = 1;
                 ownership           = 0;    
-                i                   = 0;
+                // i                   = 0;
                 read_address        = 0;
-                $display("[%0t] source_id: %h, ack asserted", $time, source_id);
+                // $display("[%0t] source_id: %h, ack asserted", $time, source_id);
 
             end else begin
                 // ==========================================================
@@ -66,7 +66,7 @@ module data_bus(
                 if(bus_valid && !first_pkt_received) begin 
                     first_pkt_received  = 1;
                     read_address        = 1; 
-                    $display("[%0t] source_id: %h, first packet received", $time, source_id);
+                    // $display("[%0t] source_id: %h, first packet received", $time, source_id);
                 end else if (bus_valid && first_pkt_received) begin
                     read_address        = 0;
                 end 
@@ -83,40 +83,32 @@ module data_bus(
                 // PRIORITY 1: Existing Ownership
                 if(ownership) begin 
                     if(send_valid && bus_ready) begin
-                        $display("[%0t] source_id: %h, sending data", $time, source_id);
+                        // $display("[%0t] source_id: %h, sending data", $time, source_id);
                         send_ready = 1; 
                     end else begin
                         send_ready = bus_ready; 
                     end
                 end 
                 
-                // // PRIORITY 2: Control Logic (ID 3)
-                // // CRITICAL FIX: This runs even if first_pkt_received was just set in Part 1
-                // else if(source_id == 2'b11 && send_valid) begin
-                //     ownership <= 1;
-                //     send_ready <= 1; // MUST be 1 immediately
-                //     $display("[%0t] source_id: %h, Control taking ownership", $time, source_id);
-                // end 
-                
                 // PRIORITY 3: Normal Modules (Must wait for first packet flag)
-                else if ((source_id == allowed_source[1:0]) && send_valid && first_pkt_received) begin
+                else if ((source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
                     if (i < 3) begin
-                        i <= i + 1;
+                        // i = i + 1;
                         send_ready = 0; 
-                        $display("[%0t] source_id: %h, waiting... (%d/3)", $time, source_id, i);
+                        // $display("[%0t] source_id: %h, waiting... (%d/3)", $time, source_id, i);
                     end else begin
                         ownership = 1;
                         send_ready = 1;
-                        i = 0;
-                        $display("[%0t] source_id: %h, acquired ownership", $time, source_id);
+                        // i = 0;
+                        // $display("[%0t] source_id: %h, acquired ownership", $time, source_id);
                     end
                 end 
                 
                 // PRIORITY 4: Not Owner / Blocked
-                else begin
-                    if (send_valid) 
-                        $display("[%0t] source_id: %h, blocked (not owner/not ready)", $time, source_id);
-                end
+                // else begin
+                    // if (send_valid) 
+                        // $display("[%0t] source_id: %h, blocked (not owner/not ready)", $time, source_id);
+                // end
             end
         end
     end
@@ -164,5 +156,23 @@ module data_bus(
             end
         end
     end
+
+
+
+// wait 3 cycles
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        i <= 0;
+    end else if (ack) begin
+        i <= 0;
+    end else if (source_id == allowed_source[1:0] && bus_valid && first_pkt_received) begin
+        if (i < 3)
+            i <= i + 1;
+    end else if (ownership) begin
+        // once owner is confirmed, freeze or reset
+        i <= 0;
+    end
+end
+
 
 endmodule
