@@ -39,7 +39,20 @@ module data_bus(
     // --- Tri-state bus drivers ---
     assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
     assign bus_valid = (ownership && (is_control || is_bus_owner) && send_valid) ? 1'b1 : 1'bz;
-// 
+
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n) begin
+        allowed_source <= 0;
+        allowed_dest   <= 3'b000;
+    end else if(ack) begin
+        allowed_source <= 7;
+        allowed_dest   <= 3'b111;
+    end else if(read_address) begin
+        allowed_source <= {1'b0, bus_data[3:2]};
+        allowed_dest   <= {1'b0, bus_data[5:4]};
+    end
+end
+
 // --- Sending logic ---
     always @(*) begin
         send_ready         = 0;       // assign default
@@ -111,8 +124,6 @@ module data_bus(
         recv_data  = 0;
         bus_ready  = 1;
         // preserve sequential state
-        allowed_source = allowed_source;
-        allowed_dest   = allowed_dest;
 
         if (!rst_n) begin
             recv_valid           = 0;
