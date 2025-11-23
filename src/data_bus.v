@@ -42,6 +42,12 @@ module data_bus(
 
 // --- Sending logic ---
     always @(*) begin
+            ownership = 0;
+    first_pkt_received = 0;
+    read_address = 0;
+    bus_ready = 1;
+    allowed_source = 3'b111;
+    allowed_dest   = 3'b111;
 
         if (!rst_n) begin
             ownership           = 0;
@@ -169,6 +175,5 @@ always @(posedge clk or negedge rst_n) begin
         i <= 0;
     end
 end
-
 
 endmodule
