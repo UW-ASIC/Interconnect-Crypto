@@ -9,11 +9,11 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-Explain how your project works
+Allows communication between modules through ready-valid handshakes 
 
 ## How to test
 
-Explain how to use your project
+use cocotb; make -B
 
 ## External hardware
 

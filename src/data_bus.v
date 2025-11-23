@@ -24,80 +24,42 @@ module data_bus(
     // Separate flags for send/receive
     reg first_pkt_received;
     reg read_address;
-    reg bus_ready = 1;
+    reg bus_ready;
 
     // Grab and store source/destination from first packet
-    reg [2:0] allowed_source = 7; 
-    reg [2:0] allowed_dest = 7;   
+    reg [2:0] allowed_source; 
+    reg [2:0] allowed_dest;   
+    wire _top_bit_used = allowed_source[2] | allowed_dest[2];
 
-    reg [2:0] i = 0; // wait 3 cycles for control
+    reg [2:0] i; // wait 3 cycles for control
 
     // wires
     wire is_control = (source_id == 2'b11 && send_valid);
-    wire is_bus_owner = (i == 3 && source_id == allowed_source[1:0]);
+    wire is_bus_owner = (i == 3 && {1'b0, source_id} == allowed_source);
 
     // --- Tri-state bus drivers ---
     assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
     assign bus_valid = (ownership && (is_control || is_bus_owner) && send_valid) ? 1'b1 : 1'bz;
-
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n) begin
-        allowed_source <= 0;
-        allowed_dest   <= 3'b000;
-    end else if(ack) begin
-        allowed_source <= 7;
-        allowed_dest   <= 3'b111;
-    end else if(read_address) begin
-        allowed_source <= {1'b0, bus_data[3:2]};
-        allowed_dest   <= {1'b0, bus_data[5:4]};
-    end
-end
-
-always @(posedge clk or negedge rst_n) begin 
-    if (!rst_n) begin
-        first_pkt_received <= 0;
-        ownership <= 0;
-    end else if (ack) begin 
-        ownership           <= 0;    
-        first_pkt_received  <= 0;
-    end else begin 
-
-        if(bus_valid && !read_address) begin 
-            first_pkt_received  <= 1;
-        end 
-
-        if(source_id == 2'b11 && send_valid) begin
-            ownership <= 1;
-        end
-
-        if ((source_id == allowed_source[1:0]) && bus_valid && !read_address) begin
-            if(i <= 3) begin 
-                ownership <= 1;
-            end
-        end
-    end
-end 
-
+// 
 // --- Sending logic ---
     always @(*) begin
-        send_ready         = 0;       // assign default
-        // first_pkt_received = first_pkt_received; // preserve sequential state
-        read_address       = 0;       // default
-        // ownership          = ownership; // preserve sequential state
 
+        ownership          = ownership;      // or 0 if you want default low
+        first_pkt_received  = first_pkt_received; // or 0
+        send_ready         = 0;
+        read_address       = 0;
+        
         if (!rst_n) begin
-            // ownership           = 0;
+            ownership           = 0;
             send_ready          = 1; // Default High on Reset
-            // first_pkt_received  = 0;
-            // i                   = 0;
+            first_pkt_received  = 0;
             read_address        = 0;
 
         end else begin
             if(ack) begin 
-                // first_pkt_received  = 0;
+                first_pkt_received  = 0;
                 send_ready          = 1;
-                // ownership           = 0;    
-                // i                   = 0;
+                ownership           = 0;    
                 read_address        = 0;
 
             end else begin
@@ -105,7 +67,7 @@ end
                 // PART 1: UPDATE INTERNAL FLAGS (Run this independently)
                 // ==========================================================
                 if(bus_valid && !first_pkt_received) begin 
-                    // first_pkt_received  = 1;
+                    first_pkt_received  = 1;
                     read_address        = 1; 
                 end else if (bus_valid && first_pkt_received) begin
                     read_address        = 0;
@@ -115,7 +77,7 @@ end
                 // PART 2: HANDLE OWNERSHIP & READY (Run this independently)
                 // ==========================================================
                 if(source_id == 2'b11 && send_valid) begin
-                    // ownership = 1;
+                    ownership = 1;
                     send_ready = 1; // MUST be 1 immediately
                 end
 
@@ -130,12 +92,11 @@ end
                 end 
                 
                 // PRIORITY 3: Normal Modules (Must wait for first packet flag)
-                else if ((source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
+                else if (({1'b0, source_id} == allowed_source) && bus_valid && first_pkt_received) begin
                     if (i < 3) begin
-                        // i = i + 1;
                         send_ready = 0; 
                     end else begin
-                        // ownership = 1;
+                        ownership = 1;
                         send_ready = 1;
                     end
                 end 
@@ -145,22 +106,36 @@ end
 
     // --- Receiving logic ---
     always @(*) begin
-        recv_valid = 0;
-        recv_data  = 0;
-        bus_ready  = 1;
-        // preserve sequential state
-
+        recv_valid     = 0;
+        recv_data      = 0;
+        bus_ready      = 1;
+        allowed_source = allowed_source;  // preserve (but prolly bad practice)
+        allowed_dest   = allowed_dest;    // preserve
+            
         if (!rst_n) begin
             recv_valid           = 0;
             recv_data            = 0;
+            allowed_source       = 0;
+            allowed_dest         = 0;
             bus_ready            = 1;
 
         end else begin
 
+            if (ack) begin 
+                allowed_source = 7;
+                allowed_dest = 7;
+            end 
+
             if (bus_valid == 1'b1) begin
 
+                // Grab src and dest from first packet
+                if (read_address && !ack) begin
+                    allowed_source      = {1'b0, bus_data[3:2]};
+                    allowed_dest        = {1'b0, bus_data[5:4]};
+                end
+
                 // Only allow reading if this module is source or destination
-                if (source_id == allowed_source[1:0] || source_id == 2'b11 || source_id == allowed_dest[1:0]) begin
+                if ({1'b0, source_id} == allowed_source || source_id == 2'b11 || {1'b0, source_id} == allowed_dest) begin
                     recv_valid = 1;
                     recv_data  = bus_data;
                     bus_ready  = 1;
@@ -188,7 +163,7 @@ always @(posedge clk or negedge rst_n) begin
         i <= 0;
     end else if (ack) begin
         i <= 0;
-    end else if (source_id == allowed_source[1:0] && bus_valid && first_pkt_received) begin
+    end else if ({1'b0, source_id} == allowed_source && bus_valid && first_pkt_received) begin
         if (i < 3)
             i <= i + 1;
     end else if (ownership) begin

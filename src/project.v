@@ -103,6 +103,8 @@ module tt_um_example (
 
   // List all unused inputs to prevent warnings
   wire _unused = &{ena, 1'b0};
+  assign uio_out[7:6] = 2'b00; 
+  assign uio_oe       = 8'b0;  // all pins inputs
 
 endmodule
 
