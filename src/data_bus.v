@@ -39,7 +39,7 @@ module data_bus(
     // --- Tri-state bus drivers ---
     assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
     assign bus_valid = (ownership && (is_control || is_bus_owner) && send_valid) ? 1'b1 : 1'bz;
-
+// 
 // --- Sending logic ---
     always @(*) begin
         if (!rst_n) begin
@@ -48,7 +48,6 @@ module data_bus(
             first_pkt_received  = 0;
             // i                   = 0;
             read_address        = 0;
-            // $display("[%0t] source_id: %h, RESET asserted", $time, source_id);
 
         end else begin
             if(ack) begin 
@@ -57,7 +56,6 @@ module data_bus(
                 ownership           = 0;    
                 // i                   = 0;
                 read_address        = 0;
-                // $display("[%0t] source_id: %h, ack asserted", $time, source_id);
 
             end else begin
                 // ==========================================================
@@ -83,32 +81,24 @@ module data_bus(
                 // PRIORITY 1: Existing Ownership
                 if(ownership) begin 
                     if(send_valid && bus_ready) begin
-                        // $display("[%0t] source_id: %h, sending data", $time, source_id);
                         send_ready = 1; 
                     end else begin
                         send_ready = bus_ready; 
                     end
                 end 
                 
+
+                
                 // PRIORITY 3: Normal Modules (Must wait for first packet flag)
                 else if ((source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
                     if (i < 3) begin
                         // i = i + 1;
                         send_ready = 0; 
-                        // $display("[%0t] source_id: %h, waiting... (%d/3)", $time, source_id, i);
                     end else begin
                         ownership = 1;
                         send_ready = 1;
-                        // i = 0;
-                        // $display("[%0t] source_id: %h, acquired ownership", $time, source_id);
                     end
                 end 
-                
-                // PRIORITY 4: Not Owner / Blocked
-                // else begin
-                    // if (send_valid) 
-                        // $display("[%0t] source_id: %h, blocked (not owner/not ready)", $time, source_id);
-                // end
             end
         end
     end
@@ -129,7 +119,7 @@ module data_bus(
                 allowed_dest = 7;
             end 
 
-            if (bus_valid === 1'b1) begin
+            if (bus_valid == 1'b1) begin
 
                 // Grab src and dest from first packet
                 if (read_address && !ack) begin
@@ -160,6 +150,7 @@ module data_bus(
 
 
 // wait 3 cycles
+
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         i <= 0;

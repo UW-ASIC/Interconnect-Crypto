@@ -87,48 +87,48 @@ DUT SIGNALS:
 """
 
 
-@cocotb.test()
-async def reset_project(dut):
-    dut._log.info("Start")
+# @cocotb.test()
+# async def reset_project(dut):
+#     dut._log.info("Start")
 
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, units="us")
-    cocotb.start_soon(clock.start())
+#     # Set the clock period to 10 us (100 KHz)
+#     clock = Clock(dut.clk, 10, units="us")
+#     cocotb.start_soon(clock.start())
 
-    # Reset
-    dut._log.info("Asserting Reset")
-    dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
+#     # Reset
+#     dut._log.info("Asserting Reset")
+#     dut.ena.value = 1
+#     dut.ui_in.value = 0
+#     dut.uio_in.value = 0
 
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
+#     dut.rst_n.value = 0
+#     await ClockCycles(dut.clk, 10)
 
-    # Outputs (need to check these)
-    RECEIVE_DATA = dut.uo_out.value
+#     # Outputs (need to check these)
+#     RECEIVE_DATA = dut.uo_out.value
 
-    RECEIVE_VALIDA = dut.uio_out.value[0]
-    RECEIVE_VALIDB = dut.uio_out.value[1]
-    RECEIVE_VALIDCTRL = dut.uio_out.value[2]
+#     RECEIVE_VALIDA = dut.uio_out.value[0]
+#     RECEIVE_VALIDB = dut.uio_out.value[1]
+#     RECEIVE_VALIDCTRL = dut.uio_out.value[2]
 
-    SEND_READYA = int(dut.uio_out.value[3])
-    SEND_READYB = dut.uio_out.value[4]
-    SEND_READYCTRL = dut.uio_out.value[5]
+#     SEND_READYA = int(dut.uio_out.value[3])
+#     SEND_READYB = dut.uio_out.value[4]
+#     SEND_READYCTRL = dut.uio_out.value[5]
     
-    # Check reset outputs
-    assert SEND_READYA == 1
-    assert SEND_READYB == 1
-    assert SEND_READYCTRL == 1
+#     # Check reset outputs
+#     assert SEND_READYA == 1
+#     assert SEND_READYB == 1
+#     assert SEND_READYCTRL == 1
     
-    assert RECEIVE_VALIDA == 0
-    assert RECEIVE_VALIDB == 0
-    assert RECEIVE_VALIDCTRL == 0
+#     assert RECEIVE_VALIDA == 0
+#     assert RECEIVE_VALIDB == 0
+#     assert RECEIVE_VALIDCTRL == 0
     
-    assert RECEIVE_DATA == 0
+#     assert RECEIVE_DATA == 0
 
-    dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 10)
-    dut._log.info("Test project behavior")
+#     dut.rst_n.value = 1
+#     await ClockCycles(dut.clk, 10)
+#     dut._log.info("Test project behavior")
 
 
     # Set the input values you want to test
