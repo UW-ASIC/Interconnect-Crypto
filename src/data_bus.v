@@ -24,7 +24,7 @@ module data_bus(
     // Separate flags for send/receive
     reg first_pkt_received;
     reg read_address;
-    reg bus_ready;
+    reg bus_ready = 1;
 
     // Grab and store source/destination from first packet
     reg [2:0] allowed_source; 
@@ -33,8 +33,11 @@ module data_bus(
     reg [2:0] i; // wait 3 cycles for control
 
     // wires
-    wire is_control = (source_id == 2'b11 && send_valid);
-    wire is_bus_owner = (i == 3 && {1'b0, source_id} == allowed_source);
+    wire is_control;
+    assign is_control = (source_id == 2'b11 && send_valid);
+    
+    wire is_bus_owner;
+    assign is_bus_owner = (i == 3 && source_id == allowed_source[1:0]);
 
     // --- Tri-state bus drivers ---
     assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
@@ -42,26 +45,23 @@ module data_bus(
 
 // --- Sending logic ---
     always @(*) begin
-            ownership = 0;
-    first_pkt_received = 0;
-    read_address = 0;
-    bus_ready = 1;
-    allowed_source = 3'b111;
-    allowed_dest   = 3'b111;
+        send_ready         = '0;       // assign default
+        first_pkt_received = first_pkt_received; // preserve sequential state
+        read_address       = '0;       // default
+        ownership          = ownership; // preserve sequential state
 
         if (!rst_n) begin
-            ownership           = 0;
-            send_ready          = 1; // Default High on Reset
-            first_pkt_received  = 0;
-            read_address        = 0;
+            ownership           = '0;
+            send_ready          = '1; // Default High on Reset
+            first_pkt_received  = '0;
+            read_address        = '0;
 
         end else begin
-
             if(ack) begin 
-                first_pkt_received  = 0;
-                send_ready          = 1;
-                ownership           = 0;    
-                read_address        = 0;
+                first_pkt_received  = '0;
+                send_ready          = '1;
+                ownership           = '0;    
+                read_address        = '0;
 
             end else begin
                 // ==========================================================
@@ -72,7 +72,9 @@ module data_bus(
                     read_address        = 1; 
                 end else if (bus_valid && first_pkt_received) begin
                     read_address        = 0;
-                end 
+                end else begin 
+                    ;
+                end
 
                 // ==========================================================
                 // PART 2: HANDLE OWNERSHIP & READY (Run this independently)
@@ -93,24 +95,24 @@ module data_bus(
                 end 
                 
                 // PRIORITY 3: Normal Modules (Must wait for first packet flag)
-                else if (({1'b0, source_id} == allowed_source) && bus_valid && first_pkt_received) begin
+                else if ((source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
                     if (i < 3) begin
+                        // i = i + 1;
                         send_ready = 0; 
                     end else begin
                         ownership = 1;
                         send_ready = 1;
-                    end 
-                end else begin 
-                    send_ready = 0;
-                    ownership = 0;
+                    end
                 end 
             end
-        end 
+        end
     end
 
     // --- Receiving logic ---
     always @(*) begin
-
+        recv_valid = 0;
+        recv_data  = 0;
+        bus_ready  = 1;
         // preserve sequential state
 
         if (!rst_n) begin
@@ -125,37 +127,34 @@ module data_bus(
             if (ack) begin 
                 allowed_source = 7;
                 allowed_dest = 7;
-                recv_valid = 0;
+            end 
 
-            end else begin
+            if (bus_valid == 1'b1) begin
 
-                if (bus_valid == 1'b1) begin
+                // Grab src and dest from first packet
+                if (read_address && !ack) begin
+                    allowed_source      = {1'b0, bus_data[3:2]};
+                    allowed_dest        = {1'b0, bus_data[5:4]};
+                end
 
-                    // Grab src and dest from first packet
-                    if (read_address && !ack) begin
-                        allowed_source      = {1'b0, bus_data[3:2]};
-                        allowed_dest        = {1'b0, bus_data[5:4]};
-                    end
+                // Only allow reading if this module is source or destination
+                if (source_id == allowed_source[1:0] || source_id == 2'b11 || source_id == allowed_dest[1:0]) begin
+                    recv_valid = 1;
+                    recv_data  = bus_data;
+                    bus_ready  = 1;
 
-                    // Only allow reading if this module is source or destination
-                    if ({1'b0, source_id} == allowed_source || source_id == 2'b11 || {1'b0, source_id} == allowed_dest) begin
-                        recv_valid = 1;
-                        recv_data  = bus_data;
-                        bus_ready  = 1;
-
-
-                    end else begin
-                        recv_valid = 0;
-                        recv_data  = 0;
-                        bus_ready  = 0;
-                    end
 
                 end else begin
                     recv_valid = 0;
                     recv_data  = 0;
+                    bus_ready  = 0;
                 end
+
+            end else begin
+                recv_valid = 0;
+                recv_data  = 0;
             end
-        end 
+        end
     end
 
 
@@ -167,7 +166,7 @@ always @(posedge clk or negedge rst_n) begin
         i <= 0;
     end else if (ack) begin
         i <= 0;
-    end else if ({1'b0, source_id} == allowed_source && bus_valid && first_pkt_received) begin
+    end else if (source_id == allowed_source[1:0] && bus_valid && first_pkt_received) begin
         if (i < 3)
             i <= i + 1;
     end else if (ownership) begin
@@ -175,5 +174,6 @@ always @(posedge clk or negedge rst_n) begin
         i <= 0;
     end
 end
+
 
 endmodule
