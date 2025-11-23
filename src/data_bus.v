@@ -24,7 +24,7 @@ module data_bus(
     // Separate flags for send/receive
     reg first_pkt_received;
     reg read_address;
-    reg bus_ready = 1;
+    reg bus_ready;
 
     // Grab and store source/destination from first packet
     reg [2:0] allowed_source; 
@@ -71,6 +71,7 @@ module data_bus(
                     first_pkt_received  = 1;
                     read_address        = 1; 
                 end else if (bus_valid && first_pkt_received) begin
+                    first_pkt_received  = first_pkt_received;
                     read_address        = 0;
                 end else begin 
                     ;
@@ -82,28 +83,35 @@ module data_bus(
                 if(source_id == 2'b11 && send_valid) begin
                     ownership = 1;
                     send_ready = 1; // MUST be 1 immediately
+                end else begin 
+                    ownership = ownership;
+                    send_ready = send_ready;
                 end
 
 
-                // PRIORITY 1: Existing Ownership
-                if(ownership) begin 
-                    if(send_valid && bus_ready) begin
-                        send_ready = 1; 
-                    end else begin
-                        send_ready = bus_ready; 
-                    end
-                end 
+                // // PRIORITY 1: Existing Ownership
+                // if(ownership) begin 
+                //     if(send_valid && bus_ready) begin
+                //         send_ready = 1; 
+                //     end else begin
+                //         send_ready = bus_ready; 
+                //     end
+                // end 
+
                 
                 // PRIORITY 3: Normal Modules (Must wait for first packet flag)
-                else if ((source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
+                if (~ownership && (source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
                     if (i < 3) begin
-                        // i = i + 1;
                         send_ready = 0; 
+                        ownership = ownership;
                     end else begin
                         ownership = 1;
                         send_ready = 1;
                     end
-                end 
+                end else begin
+                    send_ready = bus_ready;
+                    ownership = ownership;                
+                end
             end
         end
     end
