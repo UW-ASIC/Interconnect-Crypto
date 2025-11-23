@@ -62,7 +62,7 @@ always @(posedge clk or negedge rst_n) begin
         first_pkt_received  <= 0;
     end else begin 
 
-        if(bus_valid && !first_pkt_received) begin 
+        if(bus_valid && !read_address) begin 
             first_pkt_received  <= 1;
         end 
 
@@ -70,14 +70,11 @@ always @(posedge clk or negedge rst_n) begin
             ownership <= 1;
         end
 
-        if ((source_id == allowed_source[1:0]) && bus_valid && first_pkt_received) begin
+        if ((source_id == allowed_source[1:0]) && bus_valid && !read_address) begin
             if(i <= 3) begin 
                 ownership <= 1;
             end
         end
-
-
-
     end
 end 
 
