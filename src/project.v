@@ -96,14 +96,23 @@ module tt_um_example (
 
       .bus_data(shared_bus_data),
       .bus_valid(shared_bus_valid)
-  );
 
-  // Check up on receive_B, valid_B and valid_A
+    );
 
-  //assign uo_out = {receive_B[7:2], valid_B, valid_A};
 
-    //   assign uio_out = 8'b0;
-    //   assign uio_oe  = 8'b0;
+assign uo_out = (uio_in == 2'b01) ? recv_dataA :
+                (uio_in == 2'b01) ? recv_dataB :
+                recv_dataCTRL;
+
+assign uio_out[0] = recv_validA;
+assign uio_out[1] = recv_validB;
+assign uio_out[2] = recv_validCTRL;
+
+assign uio_out[3] = send_readyA;
+assign uio_out[4] = send_readyB;
+assign uio_out[5] = send_readyCTRL;
+
+
 
   // List all unused inputs to prevent warnings
   wire _unused = &{ena, uio_in, 1'b0};

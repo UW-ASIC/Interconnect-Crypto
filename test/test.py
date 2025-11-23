@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © 2024 Tiny Tapeout
+# SPDX-FileCopyrightText: Â© 2024 Tiny Tapeout
 # SPDX-License-Identifier: Apache-2.0
 
 import cocotb
@@ -73,20 +73,20 @@ async def reset_project(dut):
     RECEIVE_VALIDB = dut.uio_out.value[1]
     RECEIVE_VALIDCTRL = dut.uio_out.value[2]
 
-    SEND_READYA = dut.uio_out.value[3]
+    SEND_READYA = int(dut.uio_out.value[3])
     SEND_READYB = dut.uio_out.value[4]
     SEND_READYCTRL = dut.uio_out.value[5]
     
     # Check reset outputs
-    assert SEND_READYA.value == 0
-    assert SEND_READYB.value == 0
-    assert SEND_READYCTRL.value == 0
+    assert SEND_READYA == 0
+    assert SEND_READYB == 0
+    assert SEND_READYCTRL == 0
     
-    assert RECEIVE_VALIDA.value == 0
-    assert RECEIVE_VALIDB.value == 0
-    assert RECEIVE_VALIDCTRL.value == 0
+    assert RECEIVE_VALIDA == 0
+    assert RECEIVE_VALIDB == 0
+    assert RECEIVE_VALIDCTRL == 0
     
-    assert RECEIVE_DATA.value == 0
+    assert RECEIVE_DATA == 0
 
 
     # Set the input values you want to test
@@ -101,29 +101,11 @@ async def reset_project(dut):
     # assert dut.uo_out.value == 50
 
     # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
-    
-@cocotb.test()
-async def test_reset(dut):
-    # Proc low for reset signal
-    dut.rst_n.value = 0
-    await Timer(10, units="ns")
-     
-    # Check values
-    assert RECEIVE_VALIDA == 0
-    assert RECEIVE_VALIDB == 0
-    assert RECEIVE_VALIDCTRL == 0
+    # one or more clock cycles, and asserting the expected output values
 
-    assert SEND_READYA == 0
-    assert SEND_READYB == 0
-    assert SEND_READYCTRL == 0
-    
-    BUS_OUTPUT = BUS_CTRL
-    assert RECEIVE_DATA == 0b00000000
-    
-    dut._log.info("Reset Test Passed")
-    
 @cocotb.test()
+async def test_expected_instruction(dut):
+    print("Hello")
 
 
 """
@@ -159,5 +141,3 @@ DUT SIGNALS:
     - output wire [7:0] uio_oe,
 
 """
-
-
