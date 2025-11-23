@@ -23,34 +23,34 @@ project:
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 pinout:
   # Inputs
-  ui[0]: ""
-  ui[1]: ""
-  ui[2]: ""
-  ui[3]: ""
-  ui[4]: ""
-  ui[5]: ""
-  ui[6]: ""
-  ui[7]: ""
+  ui[0]: "ui_in0"   # corresponds to ui_in[0] in project.v
+  ui[1]: "ui_in1"   # ui_in[1]
+  ui[2]: "ui_in2"   # ui_in[2]
+  ui[3]: "ui_in3"   # ui_in[3]
+  ui[4]: "ui_in4"   # ui_in[4]
+  ui[5]: "ui_in5"   # ui_in[5]
+  ui[6]: "ui_in6"   # ui_in[6]
+  ui[7]: "ui_in7"   # ui_in[7]
 
   # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
-  uo[6]: ""
-  uo[7]: ""
+  uo[0]: "uo_out0"  # corresponds to uo_out[0]
+  uo[1]: "uo_out1"  # uo_out[1]
+  uo[2]: "uo_out2"
+  uo[3]: "uo_out3"
+  uo[4]: "uo_out4"
+  uo[5]: "uo_out5"
+  uo[6]: "uo_out6"
+  uo[7]: "uo_out7"
 
   # Bidirectional pins
-  uio[0]: "recv_validA"
-  uio[1]: "recv_validB"
-  uio[2]: "recv_validCTRL"
-  uio[3]: "send_readyA"
-  uio[4]: "send_readyB"
-  uio[5]: "send_readyCTRL"
-  uio[6]: ""
-  uio[7]: ""
+  uio[0]: "recv_validA"      # uio_out[0]
+  uio[1]: "recv_validB"      # uio_out[1]
+  uio[2]: "recv_validCTRL"   # uio_out[2]
+  uio[3]: "send_readyA"      # uio_out[3]
+  uio[4]: "send_readyB"      # uio_out[4]
+  uio[5]: "send_readyCTRL"   # uio_out[5]
+  uio[6]: ""                 # unused
+  uio[7]: ""                 # unused
 
 # Do not change!
 yaml_version: 6
