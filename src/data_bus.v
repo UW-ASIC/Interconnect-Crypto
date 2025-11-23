@@ -29,7 +29,6 @@ module data_bus(
     // Grab and store source/destination from first packet
     reg [2:0] allowed_source; 
     reg [2:0] allowed_dest;   
-    wire _top_bit_used = allowed_source[2] | allowed_dest[2];
 
     reg [2:0] i; // wait 3 cycles for control
 
@@ -40,15 +39,14 @@ module data_bus(
     // --- Tri-state bus drivers ---
     assign bus_data  = (ownership && (is_control || is_bus_owner) && send_valid) ? send_data : 8'bz;
     assign bus_valid = (ownership && (is_control || is_bus_owner) && send_valid) ? 1'b1 : 1'bz;
-// 
+
 // --- Sending logic ---
     always @(*) begin
+        send_ready         = 0;       // assign default
+        first_pkt_received = first_pkt_received; // preserve sequential state
+        read_address       = 0;       // default
+        ownership          = ownership; // preserve sequential state
 
-        ownership          = ownership;      // or 0 if you want default low
-        first_pkt_received  = first_pkt_received; // or 0
-        send_ready         = 0;
-        read_address       = 0;
-        
         if (!rst_n) begin
             ownership           = 0;
             send_ready          = 1; // Default High on Reset
@@ -56,6 +54,11 @@ module data_bus(
             read_address        = 0;
 
         end else begin
+            ownership          = ownership;      // or 0 if you want default low
+            send_ready         = 0;
+            first_pkt_received  = first_pkt_received; // or 0
+            read_address       = 0;
+
             if(ack) begin 
                 first_pkt_received  = 0;
                 send_ready          = 1;
@@ -106,12 +109,9 @@ module data_bus(
 
     // --- Receiving logic ---
     always @(*) begin
-        recv_valid     = 0;
-        recv_data      = 0;
-        bus_ready      = 1;
-        allowed_source = allowed_source;  // preserve (but prolly bad practice)
-        allowed_dest   = allowed_dest;    // preserve
-            
+
+        // preserve sequential state
+
         if (!rst_n) begin
             recv_valid           = 0;
             recv_data            = 0;
@@ -120,6 +120,10 @@ module data_bus(
             bus_ready            = 1;
 
         end else begin
+
+            recv_valid = 0;
+            recv_data  = 0;
+            bus_ready  = 1;
 
             if (ack) begin 
                 allowed_source = 7;
