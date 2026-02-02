@@ -39,6 +39,8 @@ async def test_project(dut):
     # Keep testing the module by changing the input values, waiting for
     # one or more clock cycles, and asserting the expected output values.
 
+
+#test for the ready signals
 @cocotb.test()
 async def ready_test(dut):
     
@@ -90,6 +92,58 @@ async def ready_test(dut):
     await RisingEdge(dut.clk)
     assert dut.bus_ready.value == 1
 
+#test for bus sending data
+@cocotb.test()
+async def data_transmission_test(dut):
+    #reset everything first
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    dut._log.info("Testing Ready Signals")
+    
+    #we test this module by crafting a destination and crafting a dummy hashed value to send to the module
+    dut.READY.value = 1
+    dut.ctrl_ready.value = 0
+    dut.sha_ready.value = 0
+    dut.aes_ready.value = 0
+    dut.mem_ready.value = 1
+    #now we decide that we want to do a wr_res, say we need to make a dummy address
+    dummy_addr = 0x001234
+    #now we craft the fake opcode needed for the command/driving
+    op_code = 0b10100010
+    #crafting the header as per the beats architecture required
+    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
+    #now we set up a test payload
+    payload = [0xDE,0xAD,0xBE,0xEF, 0x11,0x22,0x33,0x44]
+    await RisingEdge(dut.clk)
+    for beats in dut.header.value:
+        #send the beats of the data 1 by 1
+        dut.ctrl_data = beats
+        #set the control valid back to true
+        dut.ctrl_valid.value = 1
+        #wait for handshaking signals
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.ctrl_ready.value):
+                break
+    dut.ctrl_valid.value = 0
+    #send payload data in
+    for data in payload:
+        dut.aes_data.value = data
+        dut.aes_valid.value = 1
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.aes_ready.value):
+                break
+    dut.aes_ready.value = 0
+
+    #check whether the header was captured and matches
+    for load in payload:
+        await RisingEdge(dut.clk)
+        if dut.bus_valid.value and dut.bus_ready.value:
+            assert dut.bus_data.value == load
+    
 
 
 
