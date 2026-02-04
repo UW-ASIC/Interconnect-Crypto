@@ -279,3 +279,21 @@ async def ownership_transfer_test(dut):
     #now check the bus_owner, should be control
     assert dut.bus_owner.value == 0b00
 
+@cocotb.test()
+async def owner_release(dut):
+    #reset everything first
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    dut._log.info("Starting non_participant_test")
+    #assume that memory currently has the ownership of the bus
+    dut.bus_owner.value = 0b00
+    #now memory has to ack
+    dut.ctrl_ready.value = 1
+    dut.mem_ready.value = 1
+    #now the memory has to ack:
+    dut.ack_ready_to_mem.value = 1
+    await RisingEdge(dut.clk)
+    assert dut.bus_owner.value == 0b11
+
