@@ -144,6 +144,156 @@ async def data_transmission_test(dut):
         if dut.bus_valid.value and dut.bus_ready.value:
             assert dut.bus_data.value == load
     
+#a test for testing the non-participants in the databus driving disconnecting
+@cocotb.test()
+async def non_participant_test(dut):
+    #reset everything first
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    dut._log.info("Starting non_participant_test")
+
+    # first let's test the WR command which needs the use of mem and the use of aes
+    # conveniently as it appears to be our last test:
+    dut._log.info("Testing ")
+    dut.READY.value = 1
+    dut.ctrl_ready.value = 0
+    dut.sha_ready.value = 0
+    dut.aes_ready.value = 0
+    dut.mem_ready.value = 1
+    #now we decide that we want to do a wr_res, say we need to make a dummy address
+    dummy_addr = 0x001234
+    #now we craft the fake opcode needed for the command/driving
+    op_code = 0b10100010
+    #crafting the header as per the beats architecture required
+    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
+    #now we set up a test payload
+    payload = [0xDE,0xAD,0xBE,0xEF, 0x11,0x22,0x33,0x44]
+    await RisingEdge(dut.clk)
+    for beats in dut.header.value:
+        #send the beats of the data 1 by 1
+        dut.ctrl_data = beats
+        #set the control valid back to true
+        dut.ctrl_valid.value = 1
+        #wait for handshaking signals
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.ctrl_ready.value):
+                break
+    dut.ctrl_valid.value = 0
+    #send payload data in
+    for data in payload:
+        dut.aes_data.value = data
+        dut.aes_valid.value = 1
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.aes_ready.value):
+                break
+    dut.aes_ready.value = 0
+
+    #check whether any other non_participants are participating
+    for _ in payload:
+        await RisingEdge(dut.clk)
+        assert dut.sha_data.value == 0
+        assert dut.ctrl_data.value == 0
+
+    #now test the hashops, this doesn't require actual address
+    #reset before starting a new test:
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    dut._log_info("Testing/Logging for HashOp")
+    #turn on neccessary ports
+    dut.mem_ready.value = 1
+    dut.aes_ready.value = 1
+    #constructt the op code for aes to begin an encoding process
+    op_code = 0b10100011
+    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
+    #now we set up a test payload
+    payload = [0xDE,0xAD,0xBE,0xEF, 0x11,0x22,0x33,0x44]
+    await RisingEdge(dut.clk)
+    for beats in dut.header.value:
+        #send the beats of the data 1 by 1
+        dut.ctrl_data = beats
+        #set the control valid back to true
+        dut.ctrl_valid.value = 1
+        #wait for handshaking signals
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.ctrl_ready.value):
+                break
+    dut.ctrl_valid.value = 0
+    #send payload data in
+    for data in payload:
+        dut.aes_data.value = data
+        dut.aes_valid.value = 1
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.aes_ready.value):
+                break
+    dut.aes_ready.value = 0
+    #check whether any other non_participants are participating
+    for _ in payload:
+        await RisingEdge(dut.clk)
+        assert dut.sha_data.value == 0
+        assert dut.ctrl_data.value == 0
+        assert dut.memory_data.value == 0
 
 
+#test to see whether the ownership is transfered during operations
+@cocotb.test()
+async def ownership_transfer_test(dut):
+    #first reset the databus
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    #upon resetting then we have to send valid 4 beat data from control
+    #sending an op_code from read_txt, then bus should transfer to memory
+    #memory and aes should be set to ready and valid for transfer?
+    dut._log_info("Starting ownership transfer test")
+    dut.mem_ready.value = 1
+    dut.mem_valid.value = 1
+    dut.aes_ready.value = 1
+    dut.aes_valid.value = 1
+    dut.ctrl_ready.value = 1
+    dut.ctrl_valid.value = 1
+    dummy_addr = 0x001234
+    op_code = 0b10100001
+    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
+    #now control send 4 beats
+    await RisingEdge(dut.clk)
+    for beats in dut.header.value:
+        #send the beats of the data 1 by 1
+        dut.ctrl_data = beats
+        #set the control valid back to true
+        dut.ctrl_valid.value = 1
+        #wait for handshaking signals
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.ctrl_ready.value):
+                break
+    dut.ctrl_valid.value = 0
+    #now check the bus_owner, should be control
+    assert dut.bus_owner.value == 0b00
+
+@cocotb.test()
+async def owner_release(dut):
+    #reset everything first
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    dut._log.info("Starting non_participant_test")
+    #assume that memory currently has the ownership of the bus
+    dut.bus_owner.value = 0b00
+    #now memory has to ack
+    dut.ctrl_ready.value = 1
+    dut.mem_ready.value = 1
+    #now the memory has to ack:
+    dut.ack_ready_to_mem.value = 1
+    await RisingEdge(dut.clk)
+    assert dut.bus_owner.value == 0b11
 
