@@ -242,7 +242,40 @@ async def non_participant_test(dut):
         assert dut.memory_data.value == 0
 
 
-
+#test to see whether the ownership is transfered during operations
 @cocotb.test()
 async def ownership_transfer_test(dut):
-    
+    #first reset the databus
+    dut._log_info("Reset")
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10, unit = "us")
+    dut.rst_n.value = 1
+    #upon resetting then we have to send valid 4 beat data from control
+    #sending an op_code from read_txt, then bus should transfer to memory
+    #memory and aes should be set to ready and valid for transfer?
+    dut._log_info("Starting ownership transfer test")
+    dut.mem_ready.value = 1
+    dut.mem_valid.value = 1
+    dut.aes_ready.value = 1
+    dut.aes_valid.value = 1
+    dut.ctrl_ready.value = 1
+    dut.ctrl_valid.value = 1
+    dummy_addr = 0x001234
+    op_code = 0b10100001
+    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
+    #now control send 4 beats
+    await RisingEdge(dut.clk)
+    for beats in dut.header.value:
+        #send the beats of the data 1 by 1
+        dut.ctrl_data = beats
+        #set the control valid back to true
+        dut.ctrl_valid.value = 1
+        #wait for handshaking signals
+        while(True):
+            await RisingEdge(dut.clk)
+            if(dut.ctrl_ready.value):
+                break
+    dut.ctrl_valid.value = 0
+    #now check the bus_owner, should be control
+    assert dut.bus_owner.value == 0b00
+
