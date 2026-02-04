@@ -14,35 +14,37 @@ module data_bus_ctrl (
     input wire ready_on_ack,
     input wire valid_on_ack,
     
-    // one hot？ could be encoded? no it will be encoded yes 0b11 means nobody read
-    output reg [1:0] rd_grant,
+    // 1hot
+    output reg [3:0] rd_grant,
     // encoded
-    output reg [1:0] owner
+    output reg [1:0] data_sel,
+    output reg [1:0] rdy_sel
 );
     //src/dest ids
     localparam [1:0] ctrl_id = 2'b11, mem_id = 2'b00, aes_id = 2'b10, sha_id = 2'b01;
-
+    // module one hot encode
+    localparam [3:0] ctrl_1hot = 4'b1000, aes_1hot = 4'b0100, sha_1hot = 4'b0010, mem_1hot = 4'b0001;
     // opcode type
     localparam [1:0] hash_op = 2'b11;
     // ? tbd
     // default control ? after opcode byte handshaked goes to tansmission, back when ack bus handshake
-    localparam [3:0] idle = 4'b0, addr = 4'b1, module_transmission = 4'b2;
+    localparam [1:0] idle = 2'd0, hash_op_wait_ready = 2'd1, addr = 2'd2, module_transmission = 2'd3;
 
-    // owner of the bus
-    // reg [1:0] owner, n_owner;
-    reg [1:0] n_owner;
+    // mux sel
+    reg [1:0] n_data_sel, n_rdy_sel;
+    // rd grant
+    reg [1:0] n_rd_grant;
     // state of the bus
     reg [1:0] state, n_state;
 
     // counter if mem include
-    reg [1:0] coutner, n_counter;
+    reg [1:0] counter, n_counter;
     
     // slice opcode
     wire [1:0] dest, src, opcode;
     // latch src and dest
     reg[1:0] dest_latch, src_latch, n_dest_latch, n_src_latch;
-    // latch opcode ? maybe?
-    // reg[1:0] opcode_latch, n_opcode_latch;
+
     assign dest = data_on_bus[5:4], src = data_on_bus[3:2], opcode = data_on_bus[1:0];
 
     // handshakes on data/ack bus
@@ -50,37 +52,39 @@ module data_bus_ctrl (
     assign data_bus_fire = valid_on_bus && ready_on_bus;
     assign ack_bus_fire = valid_on_ack && ready_on_ack && (id_on_ack == src_latch);
 
+    // sequential
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            owner <= 0;
             state <= 0;
-            coutner <= 0;
+            counter <= 0;
 
-            // opcode_latch <= 0;
+            data_sel <= 0;
+            rd_grant <= 0;
+
             dest_latch <= 0;
             src_latch <= 0;
 
         end else begin
-            owner <= n_owner;
             state <= n_state;
-            coutner <= n_counter;
+            counter <= n_counter;
 
-            // opcode_latch <= n_opcode_latch;
+            data_sel <= n_data_sel;
+            rd_grant <= n_rd_grant;
+
             dest_latch <= n_dest_latch;
             src_latch <= n_src_latch;
-
         end
     end 
     
-    // next state/owner computing
+    // next state/sel computing
     always @(*) begin
         // comb default
-        n_owner = owner;
         n_state = state;
-
         n_counter = counter;
 
-        // n_opcode_latch = opcode_latch;
+        n_data_sel = data_sel;
+        n_rd_grant = rd_grant;
+
         n_dest_latch = dest_latch;
         n_src_latch = src_latch;
 
@@ -88,28 +92,53 @@ module data_bus_ctrl (
             // when ctrl owns the bus by default
             idle: begin
                 n_counter = 0;
-                n_opcode_latch = 0;
                 n_dest_latch = 0;
                 n_src_latch = 0;
-                n_owner = ctrl_id
+                // control owns the bus by default
+                n_data_sel = ctrl_id;
+                n_rd_grant = ctrl_1hot;
+
                 if(valid_on_bus) begin
                     // keep same
                     if (opcode == hash_op) begin
-                        n_state = idle; //????????
+                        n_rd_grant = (dest == aes_id) ? aes_1hot : (dest == sha_id) ? sha_1hot : 4'b0000;
+                        n_rdy_sel = dest;//should never be 4'b0000 otherwise control is cooked
+                        n_state = hash_op_wait_ready;
                     end else begin
                         // handshake
                         n_state = ready_on_bus ? addr : idle;
-                        n_owner = ready_on_bus ? ctrl_id : owner;
+                        n_rdy_sel = dest;
 
-                        // n_opcode_latch = ready_on_bus ? opcode : 0;
+                        n_rd_grant = (dest == aes_id) ? aes_1hot : (dest == sha_id) ? sha_1hot : (dest == mem_id) ? mem_1hot: ctrl_1hot; // dest decode
+                        // let source module
+                        if (!ready_on_bus) begin
+                            case (src)
+                                mem_id: n_rd_grant |= mem_1hot;
+                                aes_id: n_rd_grant |= aes_1hot;
+                                sha_id: n_rd_grant |= sha_1hot;
+                                default:;
+                            endcase
+                        end
+
+                        if (ready_on_bus) begin
+                            case (src)
+                                aes_id: n_rd_grant &= ~aes_1hot;
+                                sha_id: n_rd_grant &= ~sha_1hot;
+                                default:;
+                            endcase
+                        end
+
                         n_src_latch = ready_on_bus ? src : 0;
                         n_dest_latch = ready_on_bus ? dest : 0;
                     end
-
-                end
-                
-                
+                end                
             end 
+            // when the opcode is xx xx xx 11 hashing operation, wait for fire (ideally 1 cycle but could more than that if the sha/aes is not ready)
+            hash_op_wait_ready: begin
+                if (data_bus_fire) begin
+                    n_state = idle;
+                end
+            end
             // when src/dest contains mem, count 3 handshake update ownership
             addr: begin
                 // count the handshake
@@ -118,7 +147,8 @@ module data_bus_ctrl (
                 // when 2 beat handshaked and the third handshake 
                 if (counter == 2 && data_bus_fire) begin
                     n_state = module_transmission;
-                    n_owner = src_latch;
+                    n_data_sel = src_latch;
+                    n_rdy_sel = dest_latch;
                     // reset~ counter
                     n_counter = 0;
 
@@ -127,47 +157,20 @@ module data_bus_ctrl (
             // src module now owns the bus and ownership will be return upon ack handshake on ack bus
             module_transmission: begin
                 n_counter = 0;
-                n_owner = src_latch;
+                n_data_sel = src_latch;
+                n_rdy_sel = dest_latch;
 
                 if (ack_bus_fire) begin
-                    n_owner = ctrl_id;
+                    n_data_sel = ctrl_id;
+                    n_rdy_sel = ctrl_id;
                     n_state = idle;
                     n_src_latch = 0;
                     n_dest_latch = 0;
-                    // n_opcode_latch = 0;
                 end
-
             end
-
 
             default:; 
         endcase
 
     end
-
-    // comb rd grant
-    always @(*) begin
-        case (state)
-        // idle
-            idle: begin
-                rd_grant = ctrl_id;
-                if (valid_on_bus) begin
-                    rd_grant = dest;
-                end
-            end 
-        // addr
-            addr: begin
-                rd_grant = dest_latch;              
-            end
-        // module_transmission
-            module_transmission: begin
-                rd_grant = dest_latch;
-                if (ack_bus_fire) begin
-                    rd_grant = ctrl_id;
-                end
-            end
-            default: 
-        endcase
-    end
-
-endmodule        
+endmodule
