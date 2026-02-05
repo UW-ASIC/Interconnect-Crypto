@@ -23,6 +23,4 @@ always @(*) begin
     data_out = data_from_module;
 end
 
-
-
 endmodule
