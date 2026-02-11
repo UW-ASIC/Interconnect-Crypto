@@ -100,7 +100,7 @@ module data_bus_ctrl (
                 n_data_sel = ctrl_id;
                 n_rdy_rd_grant = ctrl_1hot;
 
-                if(valid_on_bus) begin
+                if(valid_on_bus && legal_mapping(opcode, src, dest)) begin
                     // keep same
                     if (opcode == hash_op) begin
                         n_rdy_rd_grant = dest;
@@ -110,7 +110,6 @@ module data_bus_ctrl (
                         // handshake
                         n_state = ready_on_bus ? addr : idle;
                         n_rdy_sel = dest;
-
                         n_rdy_rd_grant = dest;
                         // let source module see opcode, if not mem only 1byte for handshake
                         if (!ready_on_bus) begin
@@ -129,7 +128,6 @@ module data_bus_ctrl (
                                 default:;
                             endcase
                         end
-
                         n_src_latch = ready_on_bus ? src : 0;
                         n_dest_latch = ready_on_bus ? dest : 0;
                     end
@@ -178,6 +176,21 @@ module data_bus_ctrl (
 
             default:; 
         endcase
-
     end
+
+    function legal_mapping;
+        input [1:0] opcode, src, dest;
+        begin
+            case (opcode)
+                2'b00, 2'b01: // RD_KEY, RD_TEXT
+                    legal_mapping = (src == mem_id) && (dest == aes_id || dest == sha_id);
+                2'b10: // WR_RES
+                    legal_mapping = (dest == mem_id) && (src == aes_id || src == sha_id);
+                2'b11: // HASH_OP
+                    legal_mapping = (src == aes_id || src == sha_id);
+                default:
+                    legal_mapping = 1'b0;
+            endcase
+        end
+    endfunction
 endmodule
