@@ -8,6 +8,16 @@ from cocotb.triggers import ClockCycles, RisingEdge
 #
 
 #custom control module
+
+async def set_ready(dut, module):
+    if(module == 0b00):
+        dut.mem_ready.value = 1
+    elif(module == 0b01):
+        dut.sha_ready.value = 1
+    elif(module == 0b10):
+        dut.aes_ready.value = 1
+    else:
+        dut.ctrl_ready.value = 1
 async def control_module(dut, dest, src):
     # a very dummy version of this module
     # basically an output of 1 or drive data_on_bus as 1
@@ -26,6 +36,8 @@ async def control_module(dut, dest, src):
                 await RisingEdge(dut.clk)
             dut.dv_sel.value = src
             dut.rdy_sel.value = dest
+            set_ready(dest)
+            set_ready(src)
             return value
             
     
@@ -66,7 +78,7 @@ async def test_project(dut):
 
 #test for the ready signals
 # stuff to change:
-# 1. reference the bus owner
+# 1. reference the bus owner dv_sel
 # 2. check the ready signal on the module to be ready (1)
 # 3. send 4 beat transactions to switch ownership
 # 4. check ready 
