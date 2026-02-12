@@ -5,6 +5,30 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge
 
+#
+
+#custom control module
+async def control_module(dut, dest, src):
+    # a very dummy version of this module
+    # basically an output of 1 or drive data_on_bus as 1
+    while(True):
+        await RisingEdge(dut.clk)
+        if(dut.valid_on_bus.value == True and dut.rdy_dest.value == True):
+            # ready to receive opcode
+            value = 0
+            #wait for 3 cycles to receive opcode
+            for i in range(2):
+                value = dut.data_on_bus.value
+                value << 3
+                await RisingEdge(dut.clk)
+            #wait for 2 more rising edge to skip the beats
+            for i in range(2):
+                await RisingEdge(dut.clk)
+            dut.dv_sel.value = src
+            dut.rdy_sel.value = dest
+            return value
+            
+    
 
 @cocotb.test()
 async def test_project(dut):
@@ -41,9 +65,14 @@ async def test_project(dut):
 
 
 #test for the ready signals
+# stuff to change:
+# 1. reference the bus owner
+# 2. check the ready signal on the module to be ready (1)
+# 3. send 4 beat transactions to switch ownership
+# 4. check ready 
 @cocotb.test()
 async def ready_test(dut):
-    
+    assert True 
     dut._log_info("Reset")
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10, unit = "us")
@@ -289,7 +318,7 @@ async def owner_release(dut):
     dut._log.info("Starting non_participant_test")
     #assume that memory currently has the ownership of the bus
     dut.bus_owner.value = 0b00
-    #now memory has to ack
+    #set ready values, unsure whether neccessary
     dut.ctrl_ready.value = 1
     dut.mem_ready.value = 1
     #now the memory has to ack:
@@ -297,3 +326,7 @@ async def owner_release(dut):
     await RisingEdge(dut.clk)
     assert dut.bus_owner.value == 0b11
 
+@cocotb.test()
+async def stray_ack(dut):
+    #firstly, reset the file
+    dut._log_info("reset")
