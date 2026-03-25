@@ -32,28 +32,28 @@ always @(*) begin
     ack_valid_n = 1'b1;
     winner_source_id = 2'b11;   //CTRL has default ownship of the bus
 
-    if (ack_ready_to_ctrl == 1'b1) begin
+    if (ack_valid_from_ctrl == 1'b1) begin
       //CTRL module is asserting ack
       {ack_ready_to_ctrl, ack_ready_to_aes, ack_ready_to_sha, ack_ready_to_mem} = 4'b1000;
       ack_valid_n = 1'b0;
       winner_source_id = 2'b11;
     end
 
-    else if (ack_ready_to_aes == 1'b1) begin
+    else if (ack_valid_from_aes == 1'b1) begin
       //AES module is asserting ack
       {ack_ready_to_ctrl, ack_ready_to_aes, ack_ready_to_sha, ack_ready_to_mem} = 4'b0100;
       ack_valid_n = 1'b0;
       winner_source_id = 2'b10;
     end
 
-    else if (ack_ready_to_sha == 1'b1) begin
+    else if (ack_valid_from_sha == 1'b1) begin
       //SHA module is asserting ack
       {ack_ready_to_ctrl, ack_ready_to_aes, ack_ready_to_sha, ack_ready_to_mem} = 4'b0010;
       ack_valid_n = 1'b0;
       winner_source_id = 2'b01;
     end
 
-    else if (ack_ready_to_mem == 1'b1) begin
+    else if (ack_valid_from_mem == 1'b1) begin
       //MEM module is asserting ack
       {ack_ready_to_ctrl, ack_ready_to_aes, ack_ready_to_sha, ack_ready_to_mem} = 4'b0001;
       ack_valid_n = 1'b0;
