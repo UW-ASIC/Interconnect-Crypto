@@ -85,9 +85,9 @@ async def test_project(dut):
 @cocotb.test()
 async def ready_test(dut):
     assert True 
-    dut._log_info("Reset")
+    dut._log.info("Reset")
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10, unit = "us")
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
     dut._log.info("Testing Ready Signals")
 
@@ -137,9 +137,9 @@ async def ready_test(dut):
 @cocotb.test()
 async def data_transmission_test(dut):
     #reset everything first
-    dut._log_info("Reset")
+    dut._log.info("Reset")
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10, unit = "us")
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
     dut._log.info("Testing Ready Signals")
     
@@ -189,9 +189,9 @@ async def data_transmission_test(dut):
 @cocotb.test()
 async def non_participant_test(dut):
     #reset everything first
-    dut._log_info("Reset")
+    dut._log.info("Reset")
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10, unit = "us")
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
     dut._log.info("Starting non_participant_test")
 
@@ -241,11 +241,11 @@ async def non_participant_test(dut):
 
     #now test the hashops, this doesn't require actual address
     #reset before starting a new test:
-    dut._log_info("Reset")
+    dut._log.info("Reset")
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10, unit = "us")
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
-    dut._log_info("Testing/Logging for HashOp")
+    dut._log.info("Testing/Logging for HashOp")
     #turn on neccessary ports
     dut.mem_ready.value = 1
     dut.aes_ready.value = 1
@@ -287,14 +287,14 @@ async def non_participant_test(dut):
 @cocotb.test()
 async def ownership_transfer_test(dut):
     #first reset the databus
-    dut._log_info("Reset")
+    dut._log.info("Reset")
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10, unit = "us")
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
     #upon resetting then we have to send valid 4 beat data from control
     #sending an op_code from read_txt, then bus should transfer to memory
     #memory and aes should be set to ready and valid for transfer?
-    dut._log_info("Starting ownership transfer test")
+    dut._log.info("Starting ownership transfer test")
     dut.mem_ready.value = 1
     dut.mem_valid.value = 1
     dut.aes_ready.value = 1
@@ -323,9 +323,9 @@ async def ownership_transfer_test(dut):
 @cocotb.test()
 async def owner_release(dut):
     #reset everything first
-    dut._log_info("Reset")
+    dut._log.info("Reset")
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10, unit = "us")
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
     dut._log.info("Starting non_participant_test")
     #assume that memory currently has the ownership of the bus
@@ -341,4 +341,4 @@ async def owner_release(dut):
 @cocotb.test()
 async def stray_ack(dut):
     #firstly, reset the file
-    dut._log_info("reset")
+    dut._log.info("reset")
