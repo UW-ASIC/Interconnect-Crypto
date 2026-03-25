@@ -68,7 +68,7 @@ module data_bus_ctrl (
     assign hash_fire = (opcode == 2'b11) && ((dest == aes_id) || (dest == sha_id));
 
     // src ready and dest ready only for opcode
-    wire src_rdy, dest_rdy;
+    reg src_rdy, dest_rdy;
     
 
     always @(*) begin
@@ -210,11 +210,12 @@ module data_bus_ctrl (
     function [3:0] set;
         input [1:0] id;
         begin
+            set = dv_rd_grant;
             case (id)
-                mem_id: set |= mem_1b;
-                ctrl_id: set |= ctrl_1b;
-                aes_id: set |= aes_1b;
-                sha_id: set |= sha_id;
+                mem_id: set = set | mem_1b;
+                ctrl_id: set = set | ctrl_1b;
+                aes_id: set = set | aes_1b;
+                sha_id: set = set | sha_1b;
                 default: ;
             endcase
         end
@@ -223,11 +224,12 @@ module data_bus_ctrl (
     function [3:0] clr;
         input [1:0] id;
         begin
+            clr = dv_rd_grant;
             case (id)
-                mem_id: set &= (~mem_1b);
-                ctrl_id: set &= (~ctrl_1b);
-                aes_id: set &= (~aes_1b);
-                sha_id: set &= (~sha_id);
+                mem_id: clr = clr & (~mem_1b);
+                ctrl_id: clr = clr & (~ctrl_1b);
+                aes_id: clr = clr & (~aes_1b);
+                sha_id: clr = clr & (~sha_1b);
                 default: ;
             endcase
         end        
