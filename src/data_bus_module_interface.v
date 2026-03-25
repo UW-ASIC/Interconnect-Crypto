@@ -10,7 +10,7 @@ module data_bus_module_interface (
     input [9:0] data_from_module,
 
     // output to the module
-    output reg [9:0] data_to_module,
+    output reg [9:0] data_to_module
 );
 
 always @(*) begin

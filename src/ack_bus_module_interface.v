@@ -1,18 +1,18 @@
 module ack_bus_module_interface ( 
     input  wire        ACK_READY,
     output wire        ACK_READY_TO_MODULE,
-    input  wire        MODULE_SIDE_ACK_VAILD,
+    input  wire        MODULE_SIDE_ACK_VALID,
     output wire        ACK_VALID,
     input  wire [1:0]  MODULE_SIDE_MODULE_SOURCE_ID,
     output wire [1:0]  MODULE_SOURCE_ID
 );
 
 //READY
-//MODULE_SIDE_ACK_VALID->ACK_VAILD
+//MODULE_SIDE_ACK_VALID->ACK_VALID
 
-  assign ACK_READY=ACK_READY_TO_MODULE;
-  assign ACK_VAILD=MODULE_SIDE_ACK_VAILD;
-  assign MODULE_SOURCE_ID=MODULE_SIDE_MODULE_SOURCE_ID;
+  assign ACK_READY_TO_MODULE = ACK_READY;
+  assign ACK_VALID = MODULE_SIDE_ACK_VALID;
+  assign MODULE_SOURCE_ID = MODULE_SIDE_MODULE_SOURCE_ID;
 
 //This is an example of what the interfacing should look like, realistically the central ack_bus module will take care of all the interfacing
 //We can refer back to this in the future
