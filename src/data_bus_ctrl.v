@@ -53,8 +53,7 @@ module data_bus_ctrl (
     assign dest = data_on_bus[5:4], src = data_on_bus[3:2], opcode = data_on_bus[1:0];
 
     // handshakes on data/ack bus
-    wire data_bus_fire, ack_bus_fire;
-    assign data_bus_fire = valid_on_bus && rdy_to_owner;
+    wire ack_bus_fire;
     assign ack_bus_fire = valid_on_ack && ready_on_ack && (id_on_ack == src_latch);
 
     // opcode format matching
@@ -148,10 +147,10 @@ module data_bus_ctrl (
                     end else if(rd_key_fire || rd_txt_fire || wr_txt_fire) begin
                         // handshake
                         rdy_to_owner = src_rdy & dest_rdy;
-                        n_state = rdy_to_owner ? addr : idle;
+                        n_state = (src_rdy & dest_rdy) ? addr : idle;
                         // let source module see opcode, if not mem only 1byte for handshake
-                        n_src_latch = rdy_to_owner ? src : 0;
-                        n_dest_latch = rdy_to_owner ? dest : 0;
+                        n_src_latch = (src_rdy & dest_rdy) ? src : 0;
+                        n_dest_latch = (src_rdy & dest_rdy) ? dest : 0;
                         // set src
                         n_dv_rd_grant = set(n_dv_rd_grant, src);
                         n_dv_rd_grant = set(n_dv_rd_grant, dest);
@@ -178,9 +177,9 @@ module data_bus_ctrl (
                 rdy_to_owner = rdy_mem;
 
                 // count the handshake
-                n_counter = data_bus_fire ? counter + 1: counter;
+                n_counter = (valid_on_bus && rdy_mem) ? counter + 1: counter;
                 // when 2 beat handshaked and the third handshake 
-                if (counter == 2 && data_bus_fire) begin
+                if (counter == 2 && valid_on_bus && rdy_mem) begin
                     n_state = module_transmission;
                     n_data_sel = src_latch;
                     // set ready read grant to src module

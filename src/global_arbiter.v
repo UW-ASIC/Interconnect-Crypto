@@ -4,85 +4,41 @@ module global_arbiter (
     input wire clk,
     input wire rst_n,
 
-    // mem 
+    // data local interfaces -> global arbiter
+    // packed format:
+    //   [9]   ready
+    //   [8]   valid
+    //   [7:0] data
+    input wire [9:0] data_from_mem,
+    input wire [9:0] data_from_sha,
+    input wire [9:0] data_from_aes,
+    input wire [9:0] data_from_ctrl,
 
-    // mem -> data bus
-    input  wire [7:0] data_in_mem,
-    input  wire       valid_in_mem,
-    output wire       ready_out_mem,
+    // global arbiter -> all data local interfaces
+    output wire [9:0] data_to_locals,
 
-    // data bus -> mem
-    output wire [7:0] data_out_mem,
-    output wire       valid_out_mem,
-    input  wire       ready_in_mem,
+    // read grants to data local interfaces
+    // bit mapping:
+    //   [0] mem
+    //   [1] sha
+    //   [2] aes
+    //   [3] ctrl
+    output wire [3:0] rdy_rd_grant,
+    output wire [3:0] dv_rd_grant,
 
-    // read grants to mem local data bus interface
-    output wire       rdy_rd_grant_mem,
-    output wire       dv_rd_grant_mem,
+    // ack local interfaces -> global arbiter
+    input wire ack_valid_from_mem,
+    input wire ack_valid_from_sha,
+    input wire ack_valid_from_aes,
+    input wire ack_valid_from_ctrl,
 
-    // mem -> ack bus
-    input  wire [1:0] ack_id_in_mem,
-    input  wire       ack_valid_in_mem,
-    output wire       ack_ready_out_mem,
-
-    // aes
-
-    // aes -> data bus
-    input  wire [7:0] data_in_aes,
-    input  wire       valid_in_aes,
-    output wire       ready_out_aes,
-
-    // data bus -> aes
-    output wire [7:0] data_out_aes,
-    output wire       valid_out_aes,
-    input  wire       ready_in_aes,
-
-    // read grants to aes local data bus interface
-    output wire       rdy_rd_grant_aes,
-    output wire       dv_rd_grant_aes,
-
-    // aes -> ack bus
-    input  wire [1:0] ack_id_in_aes,
-    input  wire       ack_valid_in_aes,
-    output wire       ack_ready_out_aes,
-
-    // sha
-
-    // sha -> data bus
-    input  wire [7:0] data_in_sha,
-    input  wire       valid_in_sha,
-    output wire       ready_out_sha,
-
-    // data bus -> sha
-    output wire [7:0] data_out_sha,
-    output wire       valid_out_sha,
-    input  wire       ready_in_sha,
-
-    // read grants to sha local data bus interface
-    output wire       rdy_rd_grant_sha,
-    output wire       dv_rd_grant_sha,
-
-    // sha -> ack bus
-    input  wire [1:0] ack_id_in_sha,
-    input  wire       ack_valid_in_sha,
-    output wire       ack_ready_out_sha,
-
-    // ctrl
-
-    // ctrl -> data bus
-    // ctrl owns the bus by default and sends opcode/address bytes
-    input  wire [7:0] data_in_ctrl,
-    input  wire       valid_in_ctrl,
-    output wire       ready_out_ctrl,
-
-    // read grant to ctrl local data bus interface
-    // ctrl needs to see ready, but does not need data/valid from data bus
-    output wire       rdy_rd_grant_ctrl,
-
-    // ctrl -> ack bus
-    input  wire [1:0] ack_id_in_ctrl,
-    input  wire       ack_valid_in_ctrl,
-    output wire       ack_ready_out_ctrl
+    // global arbiter -> ack local interfaces
+    output wire ack_ready_to_mem,
+    output wire ack_ready_to_sha,
+    output wire ack_ready_to_aes,
+    output wire ack_ready_to_ctrl,  
+    // ack bus exposed to ctrl
+    output wire [2:0] ack_bus_to_ctrl
 );
 
     // local IDs
@@ -97,7 +53,6 @@ module global_arbiter (
     localparam [1:0] AES_ID  = 2'b10;
     localparam [1:0] CTRL_ID = 2'b11;
 
-
     // internal data bus wires
 
     wire [7:0] data_on_bus;
@@ -105,65 +60,31 @@ module global_arbiter (
     wire       rdy_to_owner;
     wire [1:0] data_sel;
 
-    wire [3:0] rdy_rd_grant;
-    wire [3:0] dv_rd_grant;
+    // data_sel chooses who is currently driving the shared data bus
+    assign data_on_bus = (data_sel == MEM_ID) ? data_from_mem[7:0] : (data_sel == SHA_ID) ? data_from_sha[7:0]  :
+    (data_sel == AES_ID) ? data_from_aes[7:0] : (data_sel == CTRL_ID) ? data_from_ctrl[7:0] : 8'h00;
 
+    assign valid_on_bus = (data_sel == MEM_ID) ? data_from_mem[8] : (data_sel == SHA_ID) ? data_from_sha[8] :
+    (data_sel == AES_ID) ? data_from_aes[8] : (data_sel == CTRL_ID) ? data_from_ctrl[8] : 1'b0;
+
+    // broadcast shared data bus back to all DATA_LOCAL interfaces
+    assign data_to_locals = {rdy_to_owner, valid_on_bus, data_on_bus};
 
     // internal ack bus wires
-    // ack arbiter outputs active-low valid, data_bus_ctrl wants active-high valid
-
+    // ack_bus_arbiter uses active-low valid
+    // data_bus_ctrl expects active-high valid
     wire       ack_valid_n;
     wire       valid_on_ack;
     wire       ready_on_ack;
     wire [1:0] id_on_ack;
-
-    assign valid_on_ack = ~ack_valid_n;
-    assign ready_on_ack = 1'b1;          // ack bus is always ready in this version
-    assign id_on_ack    = winner_source_id;
-
     wire [1:0] winner_source_id;
 
-    // data bus owner mux
-    // data_sel chooses who is currently driving data_on_bus/valid_on_bus
+    assign valid_on_ack = ~ack_valid_n;
+    assign ready_on_ack = 1; // forced to 1 since just need to check ack and winner for databus ctrl
+    assign id_on_ack    = winner_source_id;
 
-    assign data_on_bus = (data_sel == MEM_ID)  ? data_in_mem  : (data_sel == SHA_ID)  ? data_in_sha  : (data_sel == AES_ID)  ? data_in_aes  :
-    (data_sel == CTRL_ID) ? data_in_ctrl : 8'h00;
-
-    assign valid_on_bus = (data_sel == MEM_ID)  ? valid_in_mem  : (data_sel == SHA_ID)  ? valid_in_sha  : (data_sel == AES_ID)  ? valid_in_aes  :
-    (data_sel == CTRL_ID) ? valid_in_ctrl :1'b0;
-
-    // data bus outputs to modules
-    // data is broadcast, valid is gated by dv_rd_grant
-
-    assign data_out_mem = data_on_bus;
-    assign data_out_sha = data_on_bus;
-    assign data_out_aes = data_on_bus;
-
-    assign valid_out_mem = dv_rd_grant[0] ? valid_on_bus : 1'b0;
-    assign valid_out_sha = dv_rd_grant[1] ? valid_on_bus : 1'b0;
-    assign valid_out_aes = dv_rd_grant[2] ? valid_on_bus : 1'b0;
-
-    // ctrl does not receive data/valid from data bus, so no data_out_ctrl/valid_out_ctrl
-
-    // ready outputs to modules
-    // rdy_to_owner is broadcast only to whoever has ready-read grant
-
-    assign ready_out_mem  = rdy_rd_grant[0] ? rdy_to_owner : 1'b0;
-    assign ready_out_sha  = rdy_rd_grant[1] ? rdy_to_owner : 1'b0;
-    assign ready_out_aes  = rdy_rd_grant[2] ? rdy_to_owner : 1'b0;
-    assign ready_out_ctrl = rdy_rd_grant[3] ? rdy_to_owner : 1'b0;
-
-    // expose grant bits
-
-    assign rdy_rd_grant_mem  = rdy_rd_grant[0];
-    assign rdy_rd_grant_sha  = rdy_rd_grant[1];
-    assign rdy_rd_grant_aes  = rdy_rd_grant[2];
-    assign rdy_rd_grant_ctrl = rdy_rd_grant[3];
-
-    assign dv_rd_grant_mem   = dv_rd_grant[0];
-    assign dv_rd_grant_sha   = dv_rd_grant[1];
-    assign dv_rd_grant_aes   = dv_rd_grant[2];
-
+    // broadcast ack bus to ctrl
+    assign ack_bus_to_ctrl = {ack_valid_n, winner_source_id};
     // data bus controller
     // controls data_sel, read grants, and ready-to-current-owner
 
@@ -171,14 +92,14 @@ module global_arbiter (
         .clk          (clk),
         .rst_n        (rst_n),
 
-        // current data bus
+        // current shared data bus
         .data_on_bus  (data_on_bus),
         .valid_on_bus (valid_on_bus),
 
-        // ready from destination modules
-        .rdy_mem      (ready_in_mem),
-        .rdy_aes      (ready_in_aes),
-        .rdy_sha      (ready_in_sha),
+        // ready from modules through DATA_LOCAL interfaces
+        .rdy_mem      (data_from_mem[9]),
+        .rdy_aes      (data_from_aes[9]),
+        .rdy_sha      (data_from_sha[9]),
 
         // ack bus handshake
         .id_on_ack    (id_on_ack),
@@ -190,26 +111,25 @@ module global_arbiter (
         .dv_rd_grant  (dv_rd_grant),
         .data_sel     (data_sel),
 
-        // ready back to current owner
+        // ready back to current data bus owner
         .rdy_to_owner (rdy_to_owner)
     );
-
 
     // ack bus arbiter
     // chooses one ack source and sends winner ID to data_bus_ctrl
 
     ack_bus_arbiter u_ack_bus_arbiter (
-        // ack valid requests from modules
-        .ack_valid_from_ctrl (ack_valid_in_ctrl),
-        .ack_valid_from_aes  (ack_valid_in_aes),
-        .ack_valid_from_sha  (ack_valid_in_sha),
-        .ack_valid_from_mem  (ack_valid_in_mem),
+        // ack valid requests from ACK_LOCAL interfaces
+        .ack_valid_from_ctrl (ack_valid_from_ctrl),
+        .ack_valid_from_aes  (ack_valid_from_aes),
+        .ack_valid_from_sha  (ack_valid_from_sha),
+        .ack_valid_from_mem  (ack_valid_from_mem),
 
-        // ready back to winning module
-        .ack_ready_to_ctrl   (ack_ready_out_ctrl),
-        .ack_ready_to_aes    (ack_ready_out_aes),
-        .ack_ready_to_sha    (ack_ready_out_sha),
-        .ack_ready_to_mem    (ack_ready_out_mem),
+        // ready back to ACK_LOCAL interfaces
+        .ack_ready_to_ctrl   (ack_ready_to_ctrl),
+        .ack_ready_to_aes    (ack_ready_to_aes),
+        .ack_ready_to_sha    (ack_ready_to_sha),
+        .ack_ready_to_mem    (ack_ready_to_mem),
 
         // shared ack bus result
         .ack_valid_n         (ack_valid_n),

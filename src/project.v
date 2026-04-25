@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+
+// wire by ChatGPT
 `default_nettype none
 
 module tt_um_example (
@@ -15,47 +17,64 @@ module tt_um_example (
     input  wire       clk,
     input  wire       rst_n
 );
-    // Wired by ChatGPT too lazy to wire
+
     // ============================================================
-    // TinyTapeout pin mapping for quick smoke test
+    // TinyTapeout quick smoke-test pin mapping
+    // ============================================================
+    //
+    // ui_in[7:0]  = test byte driven by CTRL and MEM
+    //
+    // uio_in[0]   = valid_in_ctrl
+    // uio_in[1]   = valid_in_mem
+    // uio_in[2]   = ready_in_mem
+    // uio_in[3]   = ready_in_aes
+    // uio_in[4]   = ready_in_sha
+    // uio_in[5]   = ack_valid_in_mem
+    // uio_in[6]   = ack_valid_in_aes
+    // uio_in[7]   = ack_valid_in_sha
+    //
+    // uo_out[0]   = ready_out_ctrl
+    // uo_out[1]   = ready_out_mem
+    // uo_out[2]   = ready_out_aes
+    // uo_out[3]   = ready_out_sha
+    // uo_out[4]   = dv_rd_grant_mem
+    // uo_out[5]   = dv_rd_grant_aes
+    // uo_out[6]   = dv_rd_grant_sha
+    // uo_out[7]   = ack_ready_out_mem
     // ============================================================
 
-    // ui_in[7:0] is reused as the byte driven by ctrl/mem.
-    // During opcode/address phase, ctrl owns bus.
-    // During mem transmission phase, mem owns bus.
     wire [7:0] test_data_byte;
     assign test_data_byte = ui_in;
 
-    // uio_in controls valid/ready/ack test signals
     wire valid_in_ctrl;
     wire valid_in_mem;
+
     wire ready_in_mem;
     wire ready_in_aes;
     wire ready_in_sha;
+
     wire ack_valid_in_mem;
     wire ack_valid_in_aes;
     wire ack_valid_in_sha;
 
-    assign valid_in_ctrl   = uio_in[0];
-    assign valid_in_mem    = uio_in[1];
-    assign ready_in_mem    = uio_in[2];
-    assign ready_in_aes    = uio_in[3];
-    assign ready_in_sha    = uio_in[4];
+    assign valid_in_ctrl    = uio_in[0];
+    assign valid_in_mem     = uio_in[1];
+
+    assign ready_in_mem     = uio_in[2];
+    assign ready_in_aes     = uio_in[3];
+    assign ready_in_sha     = uio_in[4];
+
     assign ack_valid_in_mem = uio_in[5];
     assign ack_valid_in_aes = uio_in[6];
     assign ack_valid_in_sha = uio_in[7];
 
-    // ctrl ack unused for now
-    wire ack_valid_in_ctrl;
-    assign ack_valid_in_ctrl = 1'b0;
-
-    // uio pins are only inputs in this wrapper
+    // uio pins are inputs only for this smoke-test wrapper
     assign uio_oe  = 8'b0000_0000;
     assign uio_out = 8'b0000_0000;
 
 
     // ============================================================
-    // Wires from global arbiter
+    // Wires from interconnect
     // ============================================================
 
     wire ready_out_mem;
@@ -85,31 +104,34 @@ module tt_um_example (
     wire ack_ready_out_sha;
     wire ack_ready_out_ctrl;
 
+    wire[2:0] ack_bus_out_ctrl;
 
     // ============================================================
-    // Debug outputs to TinyTapeout pins
+    // Debug outputs
     // ============================================================
 
     assign uo_out[0] = ready_out_ctrl;
     assign uo_out[1] = ready_out_mem;
     assign uo_out[2] = ready_out_aes;
     assign uo_out[3] = ready_out_sha;
+
     assign uo_out[4] = dv_rd_grant_mem;
     assign uo_out[5] = dv_rd_grant_aes;
     assign uo_out[6] = dv_rd_grant_sha;
+
     assign uo_out[7] = ack_ready_out_mem;
 
 
     // ============================================================
-    // Your actual arbiter/interconnect
+    // Interconnect
     // ============================================================
 
-    global_arbiter u_global_arbiter (
+    interconnect_top u_interconnect (
         .clk   (clk),
         .rst_n (rst_n),
 
         // ========================================================
-        // mem
+        // MEM
         // ========================================================
 
         // mem -> data bus
@@ -127,17 +149,17 @@ module tt_um_example (
         .dv_rd_grant_mem  (dv_rd_grant_mem),
 
         // mem -> ack bus
-        .ack_id_in_mem    (2'b00),
-        .ack_valid_in_mem (ack_valid_in_mem),
-        .ack_ready_out_mem(ack_ready_out_mem),
+        .ack_id_in_mem     (2'b00),
+        .ack_valid_in_mem  (ack_valid_in_mem),
+        .ack_ready_out_mem (ack_ready_out_mem),
 
 
         // ========================================================
-        // aes
+        // AES
         // ========================================================
 
         // aes -> data bus
-        // not driving AES data in this lazy smoke test
+        // AES does not drive data in this lazy smoke test
         .data_in_aes   (8'h00),
         .valid_in_aes  (1'b0),
         .ready_out_aes (ready_out_aes),
@@ -152,17 +174,17 @@ module tt_um_example (
         .dv_rd_grant_aes  (dv_rd_grant_aes),
 
         // aes -> ack bus
-        .ack_id_in_aes    (2'b10),
-        .ack_valid_in_aes (ack_valid_in_aes),
-        .ack_ready_out_aes(ack_ready_out_aes),
+        .ack_id_in_aes     (2'b10),
+        .ack_valid_in_aes  (ack_valid_in_aes),
+        .ack_ready_out_aes (ack_ready_out_aes),
 
 
         // ========================================================
-        // sha
+        // SHA
         // ========================================================
 
         // sha -> data bus
-        // not driving SHA data in this lazy smoke test
+        // SHA does not drive data in this lazy smoke test
         .data_in_sha   (8'h00),
         .valid_in_sha  (1'b0),
         .ready_out_sha (ready_out_sha),
@@ -177,13 +199,13 @@ module tt_um_example (
         .dv_rd_grant_sha  (dv_rd_grant_sha),
 
         // sha -> ack bus
-        .ack_id_in_sha    (2'b01),
-        .ack_valid_in_sha (ack_valid_in_sha),
-        .ack_ready_out_sha(ack_ready_out_sha),
+        .ack_id_in_sha     (2'b01),
+        .ack_valid_in_sha  (ack_valid_in_sha),
+        .ack_ready_out_sha (ack_ready_out_sha),
 
 
         // ========================================================
-        // ctrl
+        // CTRL
         // ========================================================
 
         // ctrl -> data bus
@@ -191,17 +213,42 @@ module tt_um_example (
         .valid_in_ctrl  (valid_in_ctrl),
         .ready_out_ctrl (ready_out_ctrl),
 
-        // ctrl grant
+        // ctrl ready-read grant
         .rdy_rd_grant_ctrl (rdy_rd_grant_ctrl),
 
-        // ctrl -> ack bus
+        // ctrl does not write ack in this smoke test
         .ack_id_in_ctrl     (2'b11),
-        .ack_valid_in_ctrl  (ack_valid_in_ctrl),
-        .ack_ready_out_ctrl (ack_ready_out_ctrl)
+        .ack_valid_in_ctrl  (1'b0),
+        .ack_ready_out_ctrl (ack_ready_out_ctrl),
+
+        .ack_out_ctrl(ack_bus_out_ctrl)
     );
 
-    // ena is unused; TinyTapeout keeps it high when powered
+
+    // ============================================================
+    // Unused signals
+    // ============================================================
+
     wire _unused;
-    assign _unused = ena;
+    assign _unused = ^{
+        ena,
+
+        data_out_mem,
+        data_out_aes,
+        data_out_sha,
+
+        valid_out_mem,
+        valid_out_aes,
+        valid_out_sha,
+
+        rdy_rd_grant_mem,
+        rdy_rd_grant_aes,
+        rdy_rd_grant_sha,
+        rdy_rd_grant_ctrl,
+
+        ack_ready_out_aes,
+        ack_ready_out_sha,
+        ack_ready_out_ctrl
+    };
 
 endmodule
