@@ -158,12 +158,32 @@ async def mem_to_aes_smoke_test(dut):
     # opcode phase
     await FallingEdge(dut.clk)
     dut.ui_in.value = rd_txt_mem_to_aes
+    # 1 of them low
+    dut.uio_in.value = VALID_CTRL | READY_MEM 
+
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 0, "ctrl should not see ready high" 
+    await RisingEdge(dut.clk)
+    
+    # 1 of them low
+    dut.uio_in.value = VALID_CTRL | READY_AES
+
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 0, "ctrl should not see ready high" 
+    await RisingEdge(dut.clk)
+
+    # 2 of them low
+    dut.uio_in.value = VALID_CTRL 
+
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 0, "ctrl should not see ready high" 
+    await RisingEdge(dut.clk)
+    
+    # opcode handshake
     dut.uio_in.value = VALID_CTRL | READY_MEM | READY_AES
 
     await settle()
-    assert get_bit(dut.uo_out, 0) == 1, "opcode phase ctrl should see ready high"
-
-    # opcode handshake
+    assert get_bit(dut.uo_out, 0) == 1, "ctrl should not see ready high" 
     await RisingEdge(dut.clk)
 
     # address byte 0
@@ -216,6 +236,14 @@ async def mem_to_aes_smoke_test(dut):
     await settle()
     assert get_bit(dut.uo_out, 1) == 1, "mem transmission: mem should see ready from aes"
 
+    # mem drives one data byte aes backpressure
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = 0x6A
+    dut.uio_in.value = VALID_MEM
+
+    await settle()
+    assert get_bit(dut.uo_out, 1) == 0, "mem transmission: mem should not see ready from aes"    
+    
     # mem asserts ack
     await FallingEdge(dut.clk)
     dut.ui_in.value = 0x5A
