@@ -183,7 +183,8 @@ module data_bus_ctrl (
                 if (counter == 2 && data_bus_fire) begin
                     n_state = module_transmission;
                     n_data_sel = src_latch;
-                    
+                    // set ready read grant to src module
+                    n_rdy_rd_grant = set(4'b0000, src_latch);
                     // reset counter
                     n_counter = 0;
                     // rd grant reset
