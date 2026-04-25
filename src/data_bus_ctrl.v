@@ -1,5 +1,4 @@
 `default_nettype none
-`timescale 1ns/1ps
 
 module data_bus_ctrl (
     input wire clk,
@@ -42,8 +41,6 @@ module data_bus_ctrl (
     reg [1:0] n_data_sel;
     // rd grant
     reg [3:0] n_rdy_rd_grant, n_dv_rd_grant;
-    // rdy output
-    reg n_rdy_to_owner;
     // state of the bus
     reg [1:0] state, n_state;
     // counter if mem include
@@ -145,18 +142,19 @@ module data_bus_ctrl (
                         // id to 1hot decode
                         n_dv_rd_grant = (dest == aes_id) ? aes_1b : (dest == sha_id) ? sha_1b : ctrl_1b;
 
-                        rdy_to_owner = (dest == aes_id) ? rdy_aes : (dest == sha_id) ? rdy_sha :0;//should never be 0 otherwise control is cooked
+                        n_dest_latch = dest;  // remember AES or SHA
+                        rdy_to_owner = 0; //stall for 1 cycle 
                         n_state = hash_op_wait_ready;
                     end else if(rd_key_fire || rd_txt_fire || wr_txt_fire) begin
                         // handshake
-                        n_state = rdy_to_owner ? addr : idle;
                         rdy_to_owner = src_rdy & dest_rdy;
+                        n_state = rdy_to_owner ? addr : idle;
                         // let source module see opcode, if not mem only 1byte for handshake
                         n_src_latch = rdy_to_owner ? src : 0;
                         n_dest_latch = rdy_to_owner ? dest : 0;
                         // set src
-                        n_dv_rd_grant = set(src);
-                        n_dv_rd_grant = set(dest);
+                        n_dv_rd_grant = set(n_dv_rd_grant, src);
+                        n_dv_rd_grant = set(n_dv_rd_grant, dest);
                         
                     end else begin
                         // ggs
@@ -165,25 +163,31 @@ module data_bus_ctrl (
             end 
             // when the opcode is xx xx xx 11 hashing operation, wait for fire (ideally 1 cycle but could more than that if sha/aes is not ready)
             hash_op_wait_ready: begin
-                if (data_bus_fire) begin
+                rdy_to_owner = dest_rdy; //should never be 0 otherwise control is cooked
+                if (valid_on_bus && dest_rdy) begin
                     n_state = idle;
                     n_rdy_rd_grant = ctrl_1b;
+                    n_dv_rd_grant  = ctrl_1b;
+
+                    n_dest_latch = 0; //reset latch
                 end
             end
             // when src/dest contains mem, count 3 handshake update ownership
             addr: begin
+                // only mem needs handshake
+                rdy_to_owner = rdy_mem;
+
                 // count the handshake
                 n_counter = data_bus_fire ? counter + 1: counter;
-
                 // when 2 beat handshaked and the third handshake 
                 if (counter == 2 && data_bus_fire) begin
                     n_state = module_transmission;
                     n_data_sel = src_latch;
-                    rdy_to_owner = dest_rdy;
+                    
                     // reset counter
                     n_counter = 0;
                     // rd grant reset
-                    n_dv_rd_grant = clr(src);
+                    n_dv_rd_grant = clr(n_dv_rd_grant, src_latch);
                 end
             end
             // src module now owns the bus and ownership will be return upon ack handshake on ack bus
@@ -195,7 +199,7 @@ module data_bus_ctrl (
                 if (ack_bus_fire) begin
                     n_data_sel = ctrl_id;
                     rdy_to_owner = 1;
-                    n_dv_rd_grant = clr(dest);
+                    n_dv_rd_grant = clr(n_dv_rd_grant, dest_latch);
                     n_state = idle;
                     n_src_latch = 0;
                     n_dest_latch = 0;
@@ -208,30 +212,32 @@ module data_bus_ctrl (
     end
     // set decode based on id
     function [3:0] set;
+        input [3:0] grant;
         input [1:0] id;
         begin
-            set = dv_rd_grant;
+            set = grant;
             case (id)
-                mem_id: set = set | mem_1b;
+                mem_id:  set = set | mem_1b;
                 ctrl_id: set = set | ctrl_1b;
-                aes_id: set = set | aes_1b;
-                sha_id: set = set | sha_1b;
+                aes_id:  set = set | aes_1b;
+                sha_id:  set = set | sha_1b;
                 default: ;
             endcase
         end
     endfunction
     //clr decode based on id
     function [3:0] clr;
+        input [3:0] grant;
         input [1:0] id;
         begin
-            clr = dv_rd_grant;
+            clr = grant;
             case (id)
-                mem_id: clr = clr & (~mem_1b);
+                mem_id:  clr = clr & (~mem_1b);
                 ctrl_id: clr = clr & (~ctrl_1b);
-                aes_id: clr = clr & (~aes_1b);
-                sha_id: clr = clr & (~sha_1b);
+                aes_id:  clr = clr & (~aes_1b);
+                sha_id:  clr = clr & (~sha_1b);
                 default: ;
             endcase
-        end        
+        end
     endfunction
 endmodule
