@@ -1,344 +1,248 @@
-# SPDX-FileCopyrightText: © 2024 Tiny Tapeout
-# SPDX-License-Identifier: Apache-2.0
-
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles, RisingEdge
+from cocotb.triggers import ClockCycles, Timer, ReadOnly, RisingEdge, FallingEdge
 
-#
+# uio_in bit mapping
+VALID_CTRL = 1 << 0
+VALID_MEM  = 1 << 1
+READY_MEM  = 1 << 2
+READY_AES  = 1 << 3
+READY_SHA  = 1 << 4
+ACK_MEM    = 1 << 5
+ACK_AES    = 1 << 6
+ACK_SHA    = 1 << 7
 
-#custom control module
+# IDs
+MEM  = 0b00
+SHA  = 0b01
+AES  = 0b10
+CTRL = 0b11
 
-async def set_ready(dut, module):
-    if(module == 0b00):
-        dut.mem_ready.value = 1
-    elif(module == 0b01):
-        dut.sha_ready.value = 1
-    elif(module == 0b10):
-        dut.aes_ready.value = 1
-    else:
-        dut.ctrl_ready.value = 1
-async def control_module(dut, dest, src):
-    # a very dummy version of this module
-    # basically an output of 1 or drive data_on_bus as 1
-    while(True):
-        await RisingEdge(dut.clk)
-        if(dut.valid_on_bus.value == True and dut.rdy_dest.value == True):
-            # ready to receive opcode
-            value = 0
-            #wait for 3 cycles to receive opcode
-            for i in range(2):
-                value = dut.data_on_bus.value
-                value << 3
-                await RisingEdge(dut.clk)
-            #wait for 2 more rising edge to skip the beats
-            for i in range(2):
-                await RisingEdge(dut.clk)
-            dut.dv_sel.value = src
-            dut.rdy_sel.value = dest
-            set_ready(dest)
-            set_ready(src)
-            return value
-            
-    
+# opcodes
+OP_RD_KEY = 0b00
+OP_RD_TXT = 0b01
+OP_WR_TXT = 0b10
+OP_HASH   = 0b11
 
-@cocotb.test()
-async def test_project(dut):
-    dut._log.info("Start")
 
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, units="us")
-    cocotb.start_soon(clock.start())
+def enc_opcode(dest, src, op):
+    return ((dest & 0b11) << 4) | ((src & 0b11) << 2) | (op & 0b11)
 
-    # Reset
-    dut._log.info("Reset")
-    dut.ena.value = 1
+
+def get_bit(sig, idx):
+    return (int(sig.value) >> idx) & 1
+
+
+async def settle():
+    await Timer(1, "ns")
+    await ReadOnly()
+
+
+async def reset_dut(dut):
+    dut.rst_n.value = 0
     dut.ui_in.value = 0
     dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
+
+    await ClockCycles(dut.clk, 5)
+
     dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 2)
+    # IMPORTANT: do not call settle() here
+    # because settle() ends in ReadOnly phase
 
-    dut._log.info("Test project behavior")
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+@cocotb.test(timeout_time=100, timeout_unit="us")
+async def interconnect_smoke_test(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, "ns").start())
 
-    # Wait for one clock cycle to see the output values
+    dut._log.info("Reset start")
+    await reset_dut(dut)
+    dut._log.info("Reset done")
+
+    # uo_out mapping:
+    # [0] ready_out_ctrl
+    # [1] ready_out_mem
+    # [2] ready_out_aes
+    # [3] ready_out_sha
+    # [4] dv_rd_grant_mem
+    # [5] dv_rd_grant_aes
+    # [6] dv_rd_grant_sha
+    # [7] ack_ready_out_mem
+
+    dut._log.info("Check reset: ctrl should be ready")
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 1, "After reset, ready_out_ctrl should be 1"
+
+    # leave ReadOnly phase before driving
+    await RisingEdge(dut.clk)
+
+    dut._log.info("Test invalid opcode")
+
+    # invalid hash: dest=MEM is invalid for hash
+    invalid_op = enc_opcode(MEM, MEM, OP_HASH)
+
+    dut.ui_in.value = invalid_op
+    dut.uio_in.value = VALID_CTRL
+    await settle()
+
+    assert get_bit(dut.uo_out, 0) == 1, "Invalid opcode should keep ctrl ready high"
+    assert get_bit(dut.uo_out, 4) == 0, "Invalid opcode should not grant MEM dv"
+    assert get_bit(dut.uo_out, 5) == 0, "Invalid opcode should not grant AES dv"
+    assert get_bit(dut.uo_out, 6) == 0, "Invalid opcode should not grant SHA dv"
+
+    # leave ReadOnly phase before driving
+    await RisingEdge(dut.clk)
+
+    dut.uio_in.value = 0
+    dut.ui_in.value = 0
+    await ClockCycles(dut.clk, 2)
+
+    dut._log.info("Test hash opcode to AES")
+
+    # hash to AES: dest=AES, src=MEM/don't-care, op=HASH
+    hash_aes = enc_opcode(AES, MEM, OP_HASH)
+
+    # AES not ready first; ctrl valid high
+    dut.ui_in.value = hash_aes
+    dut.uio_in.value = VALID_CTRL
+    await settle()
+
+    assert get_bit(dut.uo_out, 0) == 0, "Hash should stall ctrl for grant setup"
+
+    # leave ReadOnly phase before clocking/checking next registered grant
+    await RisingEdge(dut.clk)
+    await settle()
+
+    assert get_bit(dut.uo_out, 5) == 1, "Hash should grant AES dv after stall cycle"
+    assert get_bit(dut.uo_out, 0) == 0, "Ctrl should stay stalled while AES not ready"
+
+    # leave ReadOnly phase before driving AES ready
+    await RisingEdge(dut.clk)
+
+    # Now AES becomes ready, ctrl should be allowed to handshake
+    dut.uio_in.value = VALID_CTRL | READY_AES
+    await settle()
+
+    assert get_bit(dut.uo_out, 0) == 1, "Ctrl ready should rise when AES ready"
+
+    # leave ReadOnly phase and take handshake edge
+    await RisingEdge(dut.clk)
+
+    # ctrl drops valid
+    dut.uio_in.value = READY_AES
     await ClockCycles(dut.clk, 1)
+    await settle()
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
+    assert get_bit(dut.uo_out, 5) == 0, "AES dv grant should clear after hash handshake"
 
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    dut._log.info("PASS: reset + invalid opcode + hash opcode smoke test")
 
+@cocotb.test(timeout_time=100, timeout_unit="us")
+async def mem_to_aes_smoke_test(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, "ns").start())
 
-#test for the ready signals
-# stuff to change:
-# 1. reference the bus owner dv_sel
-# 2. check the ready signal on the module to be ready (1)
-# 3. send 4 beat transactions to switch ownership
-# 4. check ready 
-@cocotb.test()
-async def ready_test(dut):
-    assert True 
-    dut._log.info("Reset")
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    dut._log.info("Testing Ready Signals")
+    dut._log.info("Reset start")
+    await reset_dut(dut)
+    dut._log.info("Reset done")
 
-    #initially, set all ready values to 0, this means that all the values are not ready
-    dut.mem_ready.value = 0
-    dut.sha_ready.value = 0
-    dut.aes_ready.value = 0
-    dut.ctrl_ready.value = 0
-    dut._log.info("All infos not set to ready")
-    #wait for rising edge and check if the bus is not ready
+    # uo_out mapping:
+    # [0] ready_out_ctrl
+    # [1] ready_out_mem
+    # [2] ready_out_aes
+    # [3] ready_out_sha
+    # [4] dv_rd_grant_mem
+    # [5] dv_rd_grant_aes
+    # [6] dv_rd_grant_sha
+    # [7] ack_ready_out_mem
+
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 1, "After reset, ctrl should be ready"
+
+    dut._log.info("Test rd_txt MEM -> AES")
+
+    rd_txt_mem_to_aes = enc_opcode(AES, MEM, OP_RD_TXT)  # 0x21
+
+    # Opcode phase
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = rd_txt_mem_to_aes
+    dut.uio_in.value = VALID_CTRL | READY_MEM | READY_AES
+
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 1, "Opcode phase: ctrl should see ready high"
+
+    # Opcode handshake
     await RisingEdge(dut.clk)
-    assert dut.bus_ready.value == 0
-    dut._log.info("Passed all not ready test")
 
-    #now set the mem to be ready
-    dut.mem_ready.value = 1
-    dut._log.info("mem is set to ready")
-    #wait for rising edge to check
+    # Address byte 0
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = 0xAA
+    dut.uio_in.value = VALID_CTRL | READY_MEM | READY_AES
+
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 1, "Addr byte 0: ctrl should be ready"
+    assert get_bit(dut.uo_out, 4) == 1, "After opcode: MEM dv grant should be high"
+    assert get_bit(dut.uo_out, 5) == 1, "After opcode: AES dv grant should be high"
+
+    # Address byte 0 handshakes.
     await RisingEdge(dut.clk)
-    assert dut.bus_ready.value == 1
+    # Address byte 1
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = 0xBB
+    dut.uio_in.value = VALID_CTRL | READY_MEM | READY_AES
 
-    #reset the mem and set the sha back to ready
-    dut.mem_ready.value = 0
-    dut.sha_ready.value = 1
-    dut._log.info("sha is set to ready")
-    #wait for rising edge to check
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 1, "Addr byte 1: ctrl should be ready"
+
+    # Address byte 1 handshakes.
     await RisingEdge(dut.clk)
-    assert dut.bus_ready.value == 1
+    # Address byte 2
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = 0xCC
+    dut.uio_in.value = VALID_CTRL | READY_MEM | READY_AES
 
-    #reset the sha and set the aes back to ready
-    dut.sha_ready.value = 0
-    dut.aes_ready.value = 1
-    dut._log.info("aes is set to ready")
-    #wait for rising edge to check
+    await settle()
+    assert get_bit(dut.uo_out, 0) == 1, "Addr byte 2: ctrl should be ready"
+
+    # Address byte 2 handshakes.
     await RisingEdge(dut.clk)
-    assert dut.bus_ready.value == 1
-    
-    #set control to ready and aes back
-    dut.ctrl_ready.value = 1
-    dut.aes_ready.value = 0
-    dut._log.info("ctrl is set to ready")
-    #wait for rising edge and check
+
+    # Module transmission phase
+    await settle()
+
+    assert get_bit(dut.uo_out, 1) == 1, "Module transmission: MEM should see ready"
+    assert get_bit(dut.uo_out, 4) == 0, "Module transmission: MEM dv grant should be cleared"
+    assert get_bit(dut.uo_out, 5) == 1, "Module transmission: AES dv grant should stay high"
+
+    dut._log.info("MEM drives data, then sends ack")
+
+    # MEM drives one data byte
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = 0x5A
+    dut.uio_in.value = VALID_MEM | READY_AES
+
+    await settle()
+    assert get_bit(dut.uo_out, 1) == 1, "MEM transmission: MEM should see ready from AES"
+
+    # MEM asserts ack
+    await FallingEdge(dut.clk)
+    dut.ui_in.value = 0x5A
+    dut.uio_in.value = VALID_MEM | READY_AES | ACK_MEM
+
+    await settle()
+    assert get_bit(dut.uo_out, 7) == 1, "MEM ack: ack_ready_out_mem should assert"
+
+    # Ack is observed on this rising edge.
     await RisingEdge(dut.clk)
-    assert dut.bus_ready.value == 1
 
-#test for bus sending data
-@cocotb.test()
-async def data_transmission_test(dut):
-    #reset everything first
-    dut._log.info("Reset")
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    dut._log.info("Testing Ready Signals")
-    
-    #we test this module by crafting a destination and crafting a dummy hashed value to send to the module
-    dut.READY.value = 1
-    dut.ctrl_ready.value = 0
-    dut.sha_ready.value = 0
-    dut.aes_ready.value = 0
-    dut.mem_ready.value = 1
-    #now we decide that we want to do a wr_res, say we need to make a dummy address
-    dummy_addr = 0x001234
-    #now we craft the fake opcode needed for the command/driving
-    op_code = 0b10100010
-    #crafting the header as per the beats architecture required
-    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
-    #now we set up a test payload
-    payload = [0xDE,0xAD,0xBE,0xEF, 0x11,0x22,0x33,0x44]
+    # Drop MEM valid/ack
+    await FallingEdge(dut.clk)
+    dut.uio_in.value = READY_AES
+    dut.ui_in.value = 0
+
     await RisingEdge(dut.clk)
-    for beats in dut.header.value:
-        #send the beats of the data 1 by 1
-        dut.ctrl_data = beats
-        #set the control valid back to true
-        dut.ctrl_valid.value = 1
-        #wait for handshaking signals
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.ctrl_ready.value):
-                break
-    dut.ctrl_valid.value = 0
-    #send payload data in
-    for data in payload:
-        dut.aes_data.value = data
-        dut.aes_valid.value = 1
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.aes_ready.value):
-                break
-    dut.aes_ready.value = 0
+    await settle()
 
-    #check whether the header was captured and matches
-    for load in payload:
-        await RisingEdge(dut.clk)
-        if dut.bus_valid.value and dut.bus_ready.value:
-            assert dut.bus_data.value == load
-    
-#a test for testing the non-participants in the databus driving disconnecting
-@cocotb.test()
-async def non_participant_test(dut):
-    #reset everything first
-    dut._log.info("Reset")
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    dut._log.info("Starting non_participant_test")
+    assert get_bit(dut.uo_out, 0) == 1, "After MEM ack: ctrl should be ready again"
+    assert get_bit(dut.uo_out, 5) == 0, "After MEM ack: AES dv grant should clear"
 
-    # first let's test the WR command which needs the use of mem and the use of aes
-    # conveniently as it appears to be our last test:
-    dut._log.info("Testing ")
-    dut.READY.value = 1
-    dut.ctrl_ready.value = 0
-    dut.sha_ready.value = 0
-    dut.aes_ready.value = 0
-    dut.mem_ready.value = 1
-    #now we decide that we want to do a wr_res, say we need to make a dummy address
-    dummy_addr = 0x001234
-    #now we craft the fake opcode needed for the command/driving
-    op_code = 0b10100010
-    #crafting the header as per the beats architecture required
-    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
-    #now we set up a test payload
-    payload = [0xDE,0xAD,0xBE,0xEF, 0x11,0x22,0x33,0x44]
-    await RisingEdge(dut.clk)
-    for beats in dut.header.value:
-        #send the beats of the data 1 by 1
-        dut.ctrl_data = beats
-        #set the control valid back to true
-        dut.ctrl_valid.value = 1
-        #wait for handshaking signals
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.ctrl_ready.value):
-                break
-    dut.ctrl_valid.value = 0
-    #send payload data in
-    for data in payload:
-        dut.aes_data.value = data
-        dut.aes_valid.value = 1
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.aes_ready.value):
-                break
-    dut.aes_ready.value = 0
-
-    #check whether any other non_participants are participating
-    for _ in payload:
-        await RisingEdge(dut.clk)
-        assert dut.sha_data.value == 0
-        assert dut.ctrl_data.value == 0
-
-    #now test the hashops, this doesn't require actual address
-    #reset before starting a new test:
-    dut._log.info("Reset")
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    dut._log.info("Testing/Logging for HashOp")
-    #turn on neccessary ports
-    dut.mem_ready.value = 1
-    dut.aes_ready.value = 1
-    #constructt the op code for aes to begin an encoding process
-    op_code = 0b10100011
-    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
-    #now we set up a test payload
-    payload = [0xDE,0xAD,0xBE,0xEF, 0x11,0x22,0x33,0x44]
-    await RisingEdge(dut.clk)
-    for beats in dut.header.value:
-        #send the beats of the data 1 by 1
-        dut.ctrl_data = beats
-        #set the control valid back to true
-        dut.ctrl_valid.value = 1
-        #wait for handshaking signals
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.ctrl_ready.value):
-                break
-    dut.ctrl_valid.value = 0
-    #send payload data in
-    for data in payload:
-        dut.aes_data.value = data
-        dut.aes_valid.value = 1
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.aes_ready.value):
-                break
-    dut.aes_ready.value = 0
-    #check whether any other non_participants are participating
-    for _ in payload:
-        await RisingEdge(dut.clk)
-        assert dut.sha_data.value == 0
-        assert dut.ctrl_data.value == 0
-        assert dut.memory_data.value == 0
-
-
-#test to see whether the ownership is transfered during operations
-@cocotb.test()
-async def ownership_transfer_test(dut):
-    #first reset the databus
-    dut._log.info("Reset")
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    #upon resetting then we have to send valid 4 beat data from control
-    #sending an op_code from read_txt, then bus should transfer to memory
-    #memory and aes should be set to ready and valid for transfer?
-    dut._log.info("Starting ownership transfer test")
-    dut.mem_ready.value = 1
-    dut.mem_valid.value = 1
-    dut.aes_ready.value = 1
-    dut.aes_valid.value = 1
-    dut.ctrl_ready.value = 1
-    dut.ctrl_valid.value = 1
-    dummy_addr = 0x001234
-    op_code = 0b10100001
-    dut.header.value = [dummy_addr >> 16 & 0xFF, dummy_addr >> 8 & 0xFF, dummy_addr >> 0 & 0xFF, op_code]
-    #now control send 4 beats
-    await RisingEdge(dut.clk)
-    for beats in dut.header.value:
-        #send the beats of the data 1 by 1
-        dut.ctrl_data = beats
-        #set the control valid back to true
-        dut.ctrl_valid.value = 1
-        #wait for handshaking signals
-        while(True):
-            await RisingEdge(dut.clk)
-            if(dut.ctrl_ready.value):
-                break
-    dut.ctrl_valid.value = 0
-    #now check the bus_owner, should be control
-    assert dut.bus_owner.value == 0b00
-
-@cocotb.test()
-async def owner_release(dut):
-    #reset everything first
-    dut._log.info("Reset")
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    dut._log.info("Starting non_participant_test")
-    #assume that memory currently has the ownership of the bus
-    dut.bus_owner.value = 0b00
-    #set ready values, unsure whether neccessary
-    dut.ctrl_ready.value = 1
-    dut.mem_ready.value = 1
-    #now the memory has to ack:
-    dut.ack_ready_to_mem.value = 1
-    await RisingEdge(dut.clk)
-    assert dut.bus_owner.value == 0b11
-
-@cocotb.test()
-async def stray_ack(dut):
-    #firstly, reset the file
-    dut._log.info("reset")
+    dut._log.info("PASS: rd_txt MEM -> AES smoke test")
