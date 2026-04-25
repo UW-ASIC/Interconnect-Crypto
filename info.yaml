@@ -1,8 +1,8 @@
 # Tiny Tapeout project information
 project:
   title:        "Interconnect Data Bus"      # Project title
-  author:       ""      # Your name
-  discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
+  author:       "1"      # Your name
+  discord:      "2"      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
   description:  "Trasnfer data between modules"      # One line description of what your project does
   language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
   clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
@@ -21,6 +21,9 @@ project:
     - "data_bus_ctrl.v"
     - "data_bus_module_interface.v"
     - "ack_bus_arbiter.v"
+    - "ack_bus_module_interface.v"
+    - "global_arbiter.v"
+    - "interconnect.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 pinout:
