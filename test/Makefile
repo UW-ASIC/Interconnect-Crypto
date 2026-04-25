@@ -11,7 +11,7 @@ interconnect.v \
 global_arbiter.v \
 ack_bus_module_interface.v \
 data_bus_ctrl.v \
-ack_bus_module_interface.v \
+data_bus_module_interface.v \
 ack_bus_arbiter.v
 
 ifneq ($(GATES),yes)
