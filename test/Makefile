@@ -5,7 +5,14 @@
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
-PROJECT_SOURCES = project.v
+PROJECT_SOURCES = \
+project.v \
+interconnect.v \
+global_arbiter.v \
+ack_bus_module_interface.v \
+data_bus_ctrl.v \
+data_bus_module_interface.v \
+ack_bus_arbiter.v
 
 ifneq ($(GATES),yes)
 
